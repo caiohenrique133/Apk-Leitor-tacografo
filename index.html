@@ -1,0 +1,1915 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12161c">
+<title>Controle de Tacógrafo — Caio</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{
+  --bg:#12161c; --panel:#1a212b; --panel2:#212a36; --line:#2c3644;
+  --ink:#e8edf4; --dim:#93a1b3; --faint:#5c6a7c;
+  --amber:#f5a623; --amber-dim:#8a6114;
+  --drive:#f5a623; --work:#4f9fe3; --avail:#b789e0; --rest:#4ec98c; --espera:#e3c04f;
+  --ok:#4ec98c; --warn:#f2c14e; --bad:#e5604d; --info:#4f9fe3;
+  --r:10px; --mono:ui-monospace,'Cascadia Mono','SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;padding-bottom:74px}
+::selection{background:var(--amber-dim)}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 8px;max-width:100%}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+h1{font-size:17px;letter-spacing:.06em;text-transform:uppercase;font-weight:700}
+h2{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);font-weight:700;margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+h2::after{content:"";flex:1;height:1px;background:var(--line)}
+.mono,td.t,.kpi b{font-family:var(--mono);font-variant-numeric:tabular-nums}
+/* header */
+header{position:sticky;top:0;z-index:20;background:linear-gradient(#161c25,#12161c);border-bottom:1px solid var(--line);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.disc{width:34px;height:34px;border-radius:50%;background:
+  repeating-conic-gradient(var(--amber) 0 4deg,transparent 4deg 15deg),
+  radial-gradient(circle at 50% 50%,var(--panel2) 0 30%,#0d1117 31% 100%);
+  border:2px solid var(--amber);flex:none}
+.hsub{font-size:11px;color:var(--dim)}
+.hgrow{flex:1;min-width:140px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--dim)}
+.filebtn{background:var(--amber);color:#1a1204;font-weight:700;border-radius:8px;padding:8px 14px}
+.filebtn:active{transform:translateY(1px)}
+/* tabs */
+nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#0e1319ee;backdrop-filter:blur(8px);border-top:1px solid var(--line);display:flex;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:1 0 auto;min-width:74px;padding:9px 8px 12px;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);display:flex;flex-direction:column;align-items:center;gap:3px}
+nav button .ic{font-size:16px;line-height:1}
+nav button.on{color:var(--amber)}
+nav button.on .ic{filter:drop-shadow(0 0 6px var(--amber-dim))}
+main{padding:14px;max-width:1080px;margin:0 auto}
+section{display:none}section.on{display:block}
+/* kpis */
+.kgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.kpi span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.kpi b{display:block;font-size:20px;margin-top:3px;font-weight:600}
+.kpi small{color:var(--faint);font-size:11px}
+.kpi.ok b{color:var(--ok)}.kpi.warn b{color:var(--warn)}.kpi.bad b{color:var(--bad)}
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+th{position:sticky;top:0;background:var(--panel2);color:var(--dim);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:7px 10px;border-bottom:1px solid #232d3a;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+td.t{text-align:right}
+tr.sub td{color:var(--dim)}
+.tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;border-radius:5px;padding:2px 7px}
+.tag.ok{background:#173428;color:var(--ok)}.tag.warn{background:#3a2f12;color:var(--warn)}
+.tag.bad{background:#3c1c17;color:var(--bad)}.tag.info{background:#152c40;color:var(--info)}
+.tag.dim{background:var(--panel2);color:var(--dim)}
+/* signature: 24h strip */
+.strip{display:flex;height:14px;border-radius:4px;overflow:hidden;background:#0d1117;min-width:190px;border:1px solid #232d3a}
+.strip i{display:block;height:100%}
+.sD{background:var(--drive)}.sW{background:var(--work)}.sA{background:var(--avail)}.sR{background:#1d2733}.sO{background:#0d1117}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--dim);margin:8px 2px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+/* bars */
+.bar{height:9px;border-radius:5px;background:#0d1117;overflow:hidden;border:1px solid #232d3a}
+.bar i{display:block;height:100%;background:var(--ok)}
+.bar.warn i{background:var(--warn)}.bar.bad i{background:var(--bad)}
+/* misc */
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:10px 0}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 13px;font-weight:600}
+.btn.amber{background:var(--amber);color:#1a1204;border-color:var(--amber)}
+.btn.danger{color:var(--bad);border-color:#5a2d26}
+.note{font-size:12px;color:var(--dim)}
+.sem{width:16px;height:16px;border-radius:50%;display:inline-block;vertical-align:-3px;margin-right:8px;box-shadow:0 0 10px currentColor}
+.sem.g{background:var(--ok);color:var(--ok)}.sem.y{background:var(--warn);color:var(--warn)}.sem.r{background:var(--bad);color:var(--bad)}
+.alert{border-left:4px solid var(--info);background:var(--panel);border-radius:8px;padding:10px 12px;margin:8px 0}
+.alert.LEVE{border-color:var(--info)}.alert.GRAVE{border-color:var(--warn)}
+.alert.MUITO_GRAVE{border-color:#f08a3c}.alert.MAXIMA{border-color:var(--bad)}
+.alert .g{font-size:10.5px;font-weight:800;letter-spacing:.08em}
+.alert.LEVE .g{color:var(--info)}.alert.GRAVE .g{color:var(--warn)}.alert.MUITO_GRAVE .g{color:#f08a3c}.alert.MAXIMA .g{color:var(--bad)}
+.alert .lb{font-size:11px;color:var(--faint)}
+.empty{padding:40px 20px;text-align:center;color:var(--dim);border:1px dashed var(--line);border-radius:var(--r)}
+footer{margin:30px 14px 10px;font-size:11px;color:var(--faint);text-align:center;line-height:1.6}
+input.mini{width:76px;padding:4px 6px;font-family:var(--mono);text-align:right}
+input.obs{width:200px}
+td .chk{width:16px;height:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+@media(min-width:900px){
+  nav{position:sticky;top:57px;bottom:auto;border-top:none;border-bottom:1px solid var(--line)}
+  body{padding-bottom:20px}
+}
+@media print{
+  body{background:#fff;color:#000;padding:0}
+  header,nav,.noprint,footer .hide{display:none!important}
+  .card,.tw,.kpi,.alert{border-color:#bbb;background:#fff}
+  th{background:#eee;color:#333}
+  section{display:none}section.print{display:block!important}
+  .tag,.strip{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+@media(prefers-reduced-motion:no-preference){
+  .kpi,.card{transition:border-color .2s}
+  .kpi:hover{border-color:var(--faint)}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="disc" aria-hidden="true"></div>
+  <div class="hgrow">
+    <h1>Controle de Tacógrafo</h1>
+    <div class="hsub" id="hDriver">Carrega ficheiros .esm / .ddd do cartão de condutor</div>
+  </div>
+  <span class="chip noprint" title="Fuso horário">🕒
+    <select id="tzSel" aria-label="Fuso horário" style="background:none;border:none;padding:0;color:var(--dim)">
+      <option value="utc">UTC</option>
+      <option value="pt">Portugal (UTC+1 verão)</option>
+    </select>
+  </span>
+  <button class="filebtn noprint" id="btnLoad">＋ Ficheiros</button>
+  <input type="file" id="fileIn" multiple accept=".esm,.ESM,.ddd,.DDD,.tgd" hidden>
+</header>
+
+<nav id="tabs" aria-label="Páginas"></nav>
+<main id="main"></main>
+
+<footer>
+  <span class="mono" style="display:block;margin-bottom:4px;color:var(--faint)">v2.3 — aba Conta: amplitude de trabalho e janela noturna; extensões a 10h contam dias com condução &gt; 9h; escala, horas extra e valores a receber; perfil e sincronização; descansos pela lógica das 24h; leitor USB nativo na app Android; bissemanal reinicia após descanso ≥ 45h; inserção manual (discos)</span>
+  <span>Os dados nunca saem deste dispositivo. Esta aplicação é uma ferramenta pessoal de apoio: não substitui os registos oficiais do tacógrafo nem aconselhamento jurídico. Reg. (CE) 561/2006 · DL 84/2026.</span>
+</footer>
+<script>
+'use strict';
+/* ============ CONSTANTES ============ */
+const ACTN=['Descanso','Disponibilidade','Outros Trabalhos','Condução'];
+const DIAS=['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
+const FERIADOS=['2026-01-01','2026-02-17','2026-04-03','2026-04-05','2026-04-25','2026-05-01','2026-06-04','2026-06-10','2026-08-15','2026-10-05','2026-11-01','2026-12-01','2026-12-08','2026-12-25',
+'2025-01-01','2025-03-04','2025-04-18','2025-04-20','2025-04-25','2025-05-01','2025-06-10','2025-06-19','2025-08-15','2025-10-05','2025-11-01','2025-12-01','2025-12-08','2025-12-25'];
+const REST_TH=420;            // descanso qualificado que separa turnos: ≥7h contínuas
+const LS='tacho_caio_v2';
+
+/* ============ ESTADO ============ */
+let RAW=[];                    // ficheiros parseados
+let S={espera:{},obs:{},extra:{},km:{},xmeta:{},dest:null,tz:'utc',ctrlHist:[],man:{},bisLim:45*60,
+       perfil:{nome:'',ap:'',cartao:'',empresa:'',matricula:'',base:'',contacto:''},
+       nuvem:{url:'',key:'',token:'',refresh:'',uid:'',email:'',ultima:0,auto:true,fich:true},
+       carim:0};
+try{Object.assign(S,JSON.parse(localStorage.getItem(LS)||'{}'))}catch(e){}
+if(!S.man)S.man={};
+if(!S.bisLim)S.bisLim=45*60;
+if(!S.perfil)S.perfil={nome:'',ap:'',cartao:'',empresa:'',matricula:'',base:'',contacto:''};
+if(!S.nuvem)S.nuvem={url:'',key:'',token:'',refresh:'',uid:'',email:'',ultima:0,auto:true,fich:true};
+if(!S.contrato)S.contrato={};
+if(!S.dest)S.dest=[["Pingo Doce Azambuja","azambuja"],["Santacarnes/Montalva T. Novas","montalva"],["Palmela","palmela"],["Maporal","maporal"],["Valsabor","valsabor"],["Santo Tirso","santo tirso"],["Lidl Torres Novas","lidl torres"],["Pingo Doce Algoz","algoz"],["Chep","chep"],["Stec","stec"],["Milharado","milharado"],["Auchan","auchan"],["Ifico","ifico"],["Domplex","dompl"],["Aldi","aldi"],["Transferências","transfer"]];
+const save=()=>{try{S.carim=Date.now();localStorage.setItem(LS,JSON.stringify(S))}catch(e){}};
+
+/* ============ UTIL ============ */
+const $=s=>document.querySelector(s);
+const pad=n=>String(n).padStart(2,'0');
+const hm=m=>{m=Math.round(m);const s=m<0?'-':'';m=Math.abs(m);return s+Math.floor(m/60)+':'+pad(m%60)};
+const hmm=m=>m==null?'—':hm(m);
+const dISO=d=>d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate());
+const dPT=iso=>iso.split('-').reverse().join('/');
+const clk=absMin=>pad(Math.floor(absMin/60)%24)+':'+pad(absMin%60);
+function tzOff(absMinUTC){ // minutos a somar
+  if(S.tz==='utc')return 0;
+  const d=new Date(absMinUTC*60000);
+  const y=d.getUTCFullYear();
+  const lastSun=(mo)=>{const x=new Date(Date.UTC(y,mo+1,0));return Date.UTC(y,mo,x.getUTCDate()-x.getUTCDay())/60000};
+  const on=lastSun(2)+60, off=lastSun(9)+60; // 01:00 UTC último dom. março/outubro
+  return (absMinUTC>=on&&absMinUTC<off)?60:0;
+}
+const L=(abs)=>abs+tzOff(abs); // UTC→local
+const U=(loc)=>loc-tzOff(loc); // local→UTC (aprox. na hora da mudança)
+function carve(list,a,b){ // remove o intervalo [a,b) da linha temporal
+  const out=[];
+  for(const s of list){
+    if(s.t1<=a||s.t0>=b){out.push(s);continue}
+    if(s.t0<a)out.push({...s,t1:a});
+    if(s.t1>b)out.push({...s,t0:b});
+  }
+  return out;
+}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+/* ============ PARSER .DDD/.ESM (Anexo 1B/1C) ============ */
+function parseDDD(buf){
+  const u=new Uint8Array(buf), dv=new DataView(buf);
+  const B={};let i=0;
+  while(i+5<=u.length){
+    const fid=(u[i]<<8|u[i+1]), app=u[i+2], ln=dv.getUint16(i+3);
+    if(i+5+ln>u.length)break;
+    if(app===0){(B[fid]=B[fid]||[]).push(buf.slice(i+5,i+5+ln))}
+    i+=5+ln;
+  }
+  const txt=(ab,o,n)=>{let s='';const a=new Uint8Array(ab,o,n);for(const c of a)if(c>=32)s+=String.fromCharCode(c);return s.trim()};
+  const t4=(ab,o)=>new DataView(ab).getUint32(o);
+  const out={days:[],vehicles:[],places:[],events:[],faults:[],controls:[],ident:null,dl:null,gen:B[0x0501]?(new Uint8Array(B[0x0501][0])[0]>=2?2:1):1};
+  if(B[0x0520]){const ab=B[0x0520][0];out.ident={card:txt(ab,1,16),ap:txt(ab,66,35),nome:txt(ab,102,35)}}
+  if(B[0x050e])out.dl=t4(B[0x050e][0],0);
+  if(B[0x0504]){
+    const ab=B[0x0504][0], dv2=new DataView(ab);
+    const pOld=dv2.getUint16(0), pNew=dv2.getUint16(2), N=ab.byteLength-4;
+    const rd=(off,n)=>{off=((off%N)+N)%N;const r=new Uint8Array(n);for(let k=0;k<n;k++)r[k]=new Uint8Array(ab)[4+((off+k)%N)];return r};
+    let off=pOld,guard=0;
+    while(guard++<1500){
+      const h=rd(off,12), hv=new DataView(h.buffer);
+      const recLen=hv.getUint16(2), ts=hv.getUint32(4), dist=hv.getUint16(10);
+      if(recLen<12||recLen>N)break;
+      const nA=(recLen-12)>>1, raw=rd(off+12,nA*2), ch=[];
+      for(let k=0;k<nA;k++){
+        const v=raw[2*k]<<8|raw[2*k+1];
+        ch.push({t:Math.floor(ts/60)+(v&0x7FF),a:(v>>11)&3,ins:((v>>13)&1)===0});
+      }
+      if(ts>500000000&&ts<4102444800)out.days.push({ts,dist,ch});
+      if(off%N===pNew%N)break;
+      off=(off+recLen)%N;
+    }
+  }
+  if(B[0x0505]){
+    const ab=B[0x0505][0],n=(ab.byteLength-2)/31|0,dv2=new DataView(ab);
+    for(let k=0;k<n;k++){const o=2+k*31,f=dv2.getUint32(o+6);
+      if(f>500000000)out.vehicles.push({o1:(dv2.getUint16(o)<<8|new Uint8Array(ab)[o+2]),o2:(dv2.getUint16(o+3)<<8|new Uint8Array(ab)[o+5]),first:f,last:dv2.getUint32(o+10),reg:txt(ab,o+15,14)});}
+  }
+  if(B[0x0506]){
+    const ab=B[0x0506][0],n=(ab.byteLength-1)/10|0,dv2=new DataView(ab),u2=new Uint8Array(ab);
+    for(let k=0;k<n;k++){const o=1+k*10,t=dv2.getUint32(o);
+      if(t>500000000)out.places.push({t,tipo:u2[o+4],pais:u2[o+5]});}
+  }
+  const evParse=(fid,arr)=>{if(!B[fid])return;const ab=B[fid][0],n=ab.byteLength/24|0,dv2=new DataView(ab),u2=new Uint8Array(ab);
+    for(let k=0;k<n;k++){const o=k*24,b=dv2.getUint32(o+1);
+      if(b>500000000)arr.push({tipo:u2[o],ini:b,fim:dv2.getUint32(o+5),reg:txt(ab,o+10,14)});}};
+  evParse(0x0502,out.events);evParse(0x0503,out.faults);
+  if(B[0x0508]){const ab=B[0x0508][0],u2=new Uint8Array(ab),dv2=new DataView(ab),t=dv2.getUint32(1);
+    if(t>500000000)out.controls.push({tipo:u2[0],t,card:txt(ab,6,16),reg:txt(ab,24,14)});}
+  return out;
+}
+
+/* ============ REGISTOS MANUAIS (discos de tacógrafo) ============ */
+/* S.man[iso] = {src,ini,fim,modo:'tot'|'blk',cond,ot,disp,blocos:[{a,ini,fim}]}
+   Horas indicadas na hora local escolhida no cabeçalho; convertidas para UTC. */
+function manualSegs(){
+  const out=[];
+  for(const d of Object.keys(S.man||{})){
+    const m=S.man[d];if(!m||!m.ini||!m.fim)continue;
+    const base=Date.parse(d+'T00:00:00Z')/60000;
+    const a=base+parseHM(m.ini);let b=base+parseHM(m.fim);if(b<=a)b+=1440;
+    const segs=[];
+    const push=(t0,t1,act,est)=>{if(t1>t0)segs.push({t0,t1,a:act,ins:true,man:true,est:!!est,dia:d})};
+    if(m.modo==='blk'&&(m.blocos||[]).length){
+      const bl=(m.blocos||[]).filter(x=>x.ini&&x.fim).map(x=>{
+        let s=base+parseHM(x.ini);while(s<a)s+=1440;
+        let e=base+parseHM(x.fim);while(e<=s)e+=1440;
+        return {s,e,act:+x.a||0};
+      }).sort((x,y)=>x.s-y.s);
+      let t=a;
+      for(const x of bl){
+        const s=Math.max(x.s,t),e=Math.min(x.e,b);
+        if(e<=s)continue;
+        if(s>t)push(t,s,0,false);
+        push(s,e,x.act,false);t=e;
+      }
+      if(t<b)push(t,b,0,false);
+    }else{
+      const jorn=b-a;
+      const c=Math.min(parseHM(m.cond),jorn);
+      const o=Math.min(parseHM(m.ot),jorn-c);
+      const dp=Math.min(parseHM(m.disp),jorn-c-o);
+      const pa=jorn-c-o-dp;
+      const acts=[[3,c],[2,o],[1,dp]].filter(x=>x[1]>0);
+      let t=a;
+      if(!acts.length)push(a,b,0,true);
+      else if(acts.length===1){const h=Math.round(acts[0][1]/2);
+        push(t,t+h,acts[0][0],true);t+=h;push(t,t+pa,0,true);t+=pa;push(t,t+(acts[0][1]-h),acts[0][0],true);}
+      else{push(t,t+acts[0][1],acts[0][0],true);t+=acts[0][1];push(t,t+pa,0,true);t+=pa;
+        for(const [ac,du] of acts.slice(1)){push(t,t+du,ac,true);t+=du}}
+    }
+    // pausas nas pontas ficam de fora do turno; as internas nunca o dividem
+    while(segs.length&&segs[0].a===0)segs.shift();
+    while(segs.length&&segs[segs.length-1].a===0)segs.pop();
+    for(const s of segs){if(s.a===0)s.nosplit=true;s.t0=U(s.t0);s.t1=U(s.t1)}
+    out.push(...segs);
+  }
+  return out.sort((x,y)=>x.t0-y.t0);
+}
+
+/* ============ LEITOR DE CARTÃO (WebUSB + CCID) ============ */
+/* Lê o cartão de condutor num leitor USB ligado por OTG e monta um .ddd igual ao
+   da descarga normal. Só faz LEITURA: nunca escreve nada no cartão. */
+const RD={dev:null,bloqueado:false,nativo:false,io:null,itf:null,epIn:0,epOut:0,seq:0,level:'apdu',proto:1,ns:0,atr:null,busy:false,log:[],ddd:null,nome:''};
+const AND=(typeof window!=='undefined'&&window.AndroidUsb)?window.AndroidUsb:null; // app Android
+const b64e=b=>{let s='';for(const x of b)s+=String.fromCharCode(x);return btoa(s)};
+const b64d=s=>{const t=atob(s||'');const b=new Uint8Array(t.length);for(let i=0;i<t.length;i++)b[i]=t.charCodeAt(i);return b};
+const hx=b=>[...b].map(x=>x.toString(16).padStart(2,'0').toUpperCase()).join(' ');
+function rlog(t,cls){RD.log.push({t,cls:cls||''});const el=$('#rdLog');
+  if(el){el.innerHTML=RD.log.map(l=>`<div class="${l.cls}">${esc(l.t)}</div>`).join('');el.scrollTop=el.scrollHeight}}
+function u8(x){return x instanceof Uint8Array?x:new Uint8Array(x)}
+function cat(a,b){const t=new Uint8Array(a.length+b.length);t.set(a);t.set(b,a.length);return t}
+
+/* ---- ligação ---- */
+async function rdOpen(dev){
+  await dev.open();
+  if(!dev.configuration)await dev.selectConfiguration(dev.configurations[0].configurationValue);
+  const cands=[];
+  for(const i of dev.configuration.interfaces){
+    const a=i.alternate,bulks=a.endpoints.filter(e=>e.type==='bulk');
+    if(bulks.length>=2)cands.push({itf:i,cls:a.interfaceClass,bulks});
+  }
+  if(!cands.length)throw new Error('Este aparelho não tem interface de dados utilizável — não parece ser um leitor de cartões.');
+  cands.sort((a,b)=>(a.cls===0x0B?1:0)-(b.cls===0x0B?1:0)); // tenta primeiro as que o Chrome não bloqueia
+  let ult=null,bloq=false;
+  for(const c of cands){
+    try{
+      await dev.claimInterface(c.itf.interfaceNumber);
+      RD.epIn=c.bulks.find(e=>e.direction==='in').endpointNumber;
+      RD.epOut=c.bulks.find(e=>e.direction==='out').endpointNumber;
+      RD.dev=dev;RD.itf=c.itf.interfaceNumber;RD.seq=0;RD.nativo=false;
+      RD.io={
+        out:async b=>{await dev.transferOut(RD.epOut,b)},
+        in:async ()=>{const r=await dev.transferIn(RD.epIn,65536);
+          return r.data?new Uint8Array(r.data.buffer,r.data.byteOffset,r.data.byteLength):new Uint8Array(0)}
+      };
+      await rdNivel(dev);
+      rlog('Leitor ligado: '+(dev.productName||'sem nome')+(dev.manufacturerName?' ('+dev.manufacturerName+')':''),'ok');
+      rlog('Interface '+c.itf.interfaceNumber+', classe 0x'+c.cls.toString(16).toUpperCase().padStart(2,'0')+' · modo '+({apdu:'APDU',tpdu:'TPDU (T=1 feito pela app)',char:'caractere'}[RD.level]||RD.level));
+      if(RD.level==='char')rlog('Este leitor trabalha ao nível do caractere e não é suportado.','bad');
+      return;
+    }catch(e){ult=e;if(c.cls===0x0B)bloq=true}
+  }
+  if(bloq){
+    RD.bloqueado=true;
+    throw new Error('O Chrome recusa-se a abrir leitores de smart card a partir de uma página web (classe USB 0x0B está na lista de classes protegidas, desde o Chrome 67). Não é problema teu nem do leitor: nenhuma página web consegue. Vê a alternativa mais abaixo.');
+  }
+  throw new Error('Não consegui abrir a interface do aparelho'+(ult?' ('+(ult.name||'')+': '+(ult.message||ult)+')':'')+'.');
+}
+function nivelDe(b){ // lê o descritor CCID: nível de troca suportado pelo leitor
+  for(let i=0;i+2<b.length;){
+    const len=b[i],type=b[i+1];if(!len)break;
+    if(type===0x21&&len>=54){
+      const dw=b[i+40]|b[i+41]<<8|b[i+42]<<16|b[i+43]<<24;
+      return (dw&0x00060000)?'apdu':((dw&0x00010000)?'tpdu':'char');
+    }
+    i+=len;
+  }
+  return 'apdu';
+}
+async function rdNivel(dev){
+  RD.level='apdu';
+  try{
+    const r=await dev.controlTransferIn({requestType:'standard',recipient:'device',request:0x06,value:0x0200,index:0},1024);
+    RD.level=nivelDe(new Uint8Array(r.data.buffer,r.data.byteOffset,r.data.byteLength));
+  }catch(e){}
+}
+/* ---- caminho nativo: app Android (sem as limitações do Chrome) ---- */
+function andLista(){
+  try{return JSON.parse(AND.list()||'[]')}catch(e){return []}
+}
+async function andAbrir(id){
+  let r;
+  try{r=JSON.parse(AND.open(id))}catch(e){throw new Error('O leitor não respondeu ao pedido de abertura.')}
+  if(!r.ok)throw new Error(r.erro||'Não consegui abrir o leitor.');
+  RD.dev={productName:r.nome};RD.itf=r.itf;RD.seq=0;RD.nativo=true;RD.bloqueado=false;
+  RD.io={
+    out:async b=>{if(!AND.out(b64e(b)))throw new Error('Falha a enviar dados para o leitor.')},
+    in:async ()=>b64d(AND.inp(3000))
+  };
+  RD.level='apdu';
+  try{const d=b64d(AND.descritores());if(d.length)RD.level=nivelDe(d)}catch(e){}
+  rlog('Leitor ligado: '+(r.nome||'sem nome'),'ok');
+  rlog('Interface '+r.itf+', classe 0x'+(r.cls||0).toString(16).toUpperCase().padStart(2,'0')+' · modo '+({apdu:'APDU',tpdu:'TPDU (T=1 feito pela app)',char:'caractere'}[RD.level]||RD.level)+' · acesso nativo');
+}
+async function rdClose(){
+  try{
+    if(RD.dev){await ccid(0x63)}
+    if(RD.nativo)AND.close();
+    else if(RD.dev){await RD.dev.releaseInterface(RD.itf);await RD.dev.close()}
+  }catch(e){}
+  RD.dev=null;RD.io=null;RD.nativo=false;rlog('Leitor desligado.');
+}
+
+/* ---- CCID ---- */
+async function ccid(tipo,dados,p){
+  const d=dados||new Uint8Array(0),n=d.length,pr=p||[0,0,0];
+  const b=new Uint8Array(10+n);
+  b[0]=tipo;b[1]=n&255;b[2]=(n>>8)&255;b[3]=(n>>16)&255;b[4]=(n>>24)&255;
+  b[5]=0;b[6]=RD.seq=(RD.seq+1)&255;b[7]=pr[0];b[8]=pr[1];b[9]=pr[2];
+  b.set(d,10);
+  await RD.io.out(b);
+  for(let volta=0;volta<60;volta++){
+    const h=await RD.io.in();
+    if(!h||h.length<10)continue;
+    const len=h[1]|h[2]<<8|h[3]<<16|h[4]<<24, st=h[7];
+    if((st&0xC0)===0x80){await new Promise(s=>setTimeout(s,60));continue} // leitor pediu mais tempo
+    if((st&0xC0)===0x40)throw new Error('O leitor devolveu erro (0x'+h[8].toString(16)+'). O cartão está bem encaixado?');
+    let out=h.slice(10,10+len);
+    while(out.length<len)out=cat(out,await RD.io.in());
+    return out.slice(0,len);
+  }
+  throw new Error('O leitor não respondeu.');
+}
+async function ccidLigaCartao(){
+  let erro=null;
+  for(const v of [0x00,0x01,0x02,0x03]){
+    try{const atr=await ccid(0x62,null,[v,0,0]);if(atr&&atr.length){RD.atr=atr;return atr}}
+    catch(e){erro=e}
+  }
+  throw erro||new Error('Não consegui ligar o cartão. Verifica se está inserido com o chip para dentro.');
+}
+function atrProto(atr){ // 0 ou 1
+  if(!atr||atr.length<2)return 1;
+  let i=1,y=atr[1]>>4,proto=0,primeiro=true;
+  while(true){
+    if(y&1)i++;if(y&2)i++;if(y&4)i++;
+    if(y&8){i++;if(i>=atr.length)break;if(primeiro){proto=atr[i]&0x0F;primeiro=false}y=atr[i]>>4}
+    else break;
+  }
+  return proto;
+}
+
+/* ---- T=1 (para leitores que trabalham ao nível do TPDU) ---- */
+function lrc(b){let x=0;for(const v of b)x^=v;return x}
+function t1Bloco(pcb,inf){
+  const d=inf||new Uint8Array(0);
+  const b=new Uint8Array(4+d.length);
+  b[0]=0x00;b[1]=pcb;b[2]=d.length;b.set(d,3);b[3+d.length]=lrc(b.slice(0,3+d.length));
+  return b;
+}
+async function t1Troca(cmd){
+  let resp=new Uint8Array(0);
+  let r=await ccid(0x6F,t1Bloco(RD.ns?0x40:0x00,cmd));
+  RD.ns^=1;
+  let nr=0,guarda=0;
+  while(guarda++<300){
+    if(!r||r.length<4)throw new Error('Bloco T=1 inválido vindo do cartão.');
+    const pcb=r[1],len=r[2],inf=r.slice(3,3+len);
+    if((pcb&0x80)===0){                       // bloco I
+      resp=cat(resp,inf);
+      nr=(pcb&0x40)?1:0;
+      if(pcb&0x20){                            // há mais para vir
+        r=await ccid(0x6F,t1Bloco(0x80|((nr^1)<<4)));continue;
+      }
+      return resp;
+    }
+    if((pcb&0xC0)===0xC0){                     // bloco S
+      if((pcb&0x3F)===0x03){r=await ccid(0x6F,t1Bloco(0xE3,inf));continue}   // pedido de mais tempo
+      if((pcb&0x3F)===0x01){r=await ccid(0x6F,t1Bloco(0xE1,inf));continue}   // pedido de IFS
+      throw new Error('O cartão pediu uma operação T=1 não suportada.');
+    }
+    r=await ccid(0x6F,t1Bloco(0x80|(nr<<4)));  // bloco R: repetir
+  }
+  throw new Error('Troca T=1 sem fim à vista.');
+}
+
+/* ---- APDU ---- */
+async function apdu(cmd){
+  const raw=(RD.level==='tpdu'&&RD.proto===1)?await t1Troca(cmd):await ccid(0x6F,cmd);
+  if(!raw||raw.length<2)throw new Error('Resposta inválida do cartão.');
+  const sw1=raw[raw.length-2],sw2=raw[raw.length-1];
+  let dados=raw.slice(0,-2);
+  if(sw1===0x6C&&cmd.length>=5){const c=Uint8Array.from(cmd);c[4]=sw2;return apdu(c)}
+  if(sw1===0x61){
+    const r2=await apdu(new Uint8Array([0x00,0xC0,0x00,0x00,sw2]));
+    return {dados:cat(dados,r2.dados),sw:r2.sw};
+  }
+  return {dados,sw:(sw1<<8)|sw2};
+}
+const AID=[0xFF,0x54,0x41,0x43,0x48,0x4F]; // aplicação tacógrafo (1.ª geração)
+async function selApp(){
+  for(const p2 of [0x0C,0x00]){
+    const r=await apdu(new Uint8Array([0x00,0xA4,0x04,p2,0x06,...AID]));
+    if(r.sw===0x9000)return true;
+  }
+  return false;
+}
+async function selEF(fid){
+  for(const p2 of [0x0C,0x00]){
+    const r=await apdu(new Uint8Array([0x00,0xA4,0x02,p2,0x02,fid>>8,fid&255]));
+    if(r.sw===0x9000)return true;
+  }
+  return false;
+}
+async function lerEF(max){
+  let out=new Uint8Array(0),off=0;
+  while(off<32767){
+    const n=max?Math.min(255,max-off):255;
+    if(n<=0)break;
+    const r=await apdu(new Uint8Array([0x00,0xB0,(off>>8)&0x7F,off&255,n===256?0:n]));
+    if(r.sw===0x9000){
+      if(!r.dados.length)break;
+      out=cat(out,r.dados);off+=r.dados.length;
+      if(r.dados.length<n)break;
+    }else if(r.sw===0x6B00||r.sw===0x6282||r.sw===0x6A82||r.sw===0x6700)break;
+    else throw new Error('READ BINARY devolveu 0x'+r.sw.toString(16).toUpperCase());
+  }
+  return out;
+}
+async function assinaturaSo(){ // PSO: calcular assinatura (o hash já foi feito)
+  const s=await apdu(new Uint8Array([0x00,0x2A,0x9E,0x9A,0x80]));
+  return (s.sw===0x9000&&s.dados.length)?s.dados:null;
+}
+async function assinatura(){ // hash do ficheiro + assinatura
+  const h=await apdu(new Uint8Array([0x80,0x2A,0x90,0x00]));
+  if(h.sw!==0x9000)return null;
+  return assinaturaSo();
+}
+/* ficheiros da 1.ª geração: [FID, tamanho fixo (0 = descobrir), assinado, nome] */
+const EFS=[
+  [0x0002,25,0,'ICC'],[0x0005,8,0,'IC'],
+  [0xC100,194,0,'Certificado do cartão'],[0xC108,194,0,'Certificado da autoridade'],
+  [0x0501,10,1,'Identificação da aplicação'],[0x0520,143,1,'Identificação do condutor'],
+  [0x050E,4,1,'Data da última descarga'],[0x0521,53,1,'Carta de condução'],
+  [0x0502,0,1,'Eventos'],[0x0503,0,1,'Avarias'],[0x0504,0,1,'Atividades'],
+  [0x0505,0,1,'Veículos utilizados'],[0x0506,0,1,'Locais'],
+  [0x0507,19,1,'Utilização atual'],[0x0508,46,1,'Controlos'],[0x0522,0,1,'Condições específicas']
+];
+function tlv(fid,app,dados){
+  const b=new Uint8Array(5+dados.length);
+  b[0]=fid>>8;b[1]=fid&255;b[2]=app;b[3]=dados.length>>8;b[4]=dados.length&255;
+  b.set(dados,5);return b;
+}
+async function rdLerCartao(){
+  RD.busy=true;render();
+  try{
+    rlog('A ligar o cartão…');
+    const atr=await ccidLigaCartao();
+    RD.proto=atrProto(atr);RD.ns=0;
+    rlog('ATR: '+hx(atr));
+    rlog('Protocolo do cartão: T='+RD.proto);
+    if(!await selApp())throw new Error('Não encontrei a aplicação de tacógrafo neste cartão. É mesmo um cartão de condutor?');
+    rlog('Aplicação de tacógrafo selecionada.','ok');
+    let ficheiro=new Uint8Array(0),tam={},semAss=0;
+    for(const [fid,fixo,ass,nome] of EFS){
+      if(!await selEF(fid)){rlog('· '+nome+': não existe no cartão','dim');continue}
+      let hashOk=false;
+      if(ass){try{hashOk=(await apdu(new Uint8Array([0x80,0x2A,0x90,0x00]))).sw===0x9000}catch(e){}}
+      const dados=await lerEF(fixo||tam[fid]||0);
+      if(!dados.length){rlog('· '+nome+': vazio','dim');continue}
+      ficheiro=cat(ficheiro,tlv(fid,0,dados));
+      rlog('· '+nome+': '+dados.length+' bytes','ok');
+      if(fid===0x0501&&dados.length>=10){ // dimensões dos ficheiros variáveis
+        tam[0x0502]=dados[3]*6*24;tam[0x0503]=dados[4]*2*24;
+        tam[0x0504]=(dados[5]<<8|dados[6]);
+        tam[0x0505]=2+(dados[7]<<8|dados[8])*31;tam[0x0506]=1+dados[9]*10;
+      }
+      if(ass){
+        let sig=null;
+        try{sig=hashOk?await assinaturaSo():await assinatura()}catch(e){}
+        if(sig)ficheiro=cat(ficheiro,tlv(fid,1,sig));else semAss++;
+      }
+      await new Promise(s=>setTimeout(s,0));
+    }
+    if(!ficheiro.length)throw new Error('Não saiu nada do cartão.');
+    if(semAss)rlog(semAss+' ficheiro(s) sem assinatura digital — os dados estão cá, mas este .ddd não serve como cópia oficial.','warn');
+    RD.ddd=ficheiro;
+    const p=parseDDD(ficheiro.buffer.slice(ficheiro.byteOffset,ficheiro.byteOffset+ficheiro.byteLength));
+    RD.nome=p.ident?((p.ident.nome+'_'+p.ident.ap).replace(/[^A-Za-z0-9_]/g,'')||'cartao'):'cartao';
+    RAW.push(p);
+    try{await IDB.set('leitor_'+Date.now(),ficheiro.buffer.slice(0))}catch(e){}
+    rlog('Leitura completa: '+ficheiro.length+' bytes, '+p.days.length+' dias de atividade.','ok');
+    RD.busy=false;rebuild();
+  }catch(e){
+    rlog('Falhou: '+e.message,'bad');RD.busy=false;render();
+  }
+}
+
+/* ============ CONTA E SINCRONIZAÇÃO (Supabase via REST, sem bibliotecas) ============ */
+/* O telemóvel manda sempre: os dados vivem aqui e a nuvem é uma cópia.
+   Sem ligação, a app funciona na mesma — a sincronização fica para quando houver rede. */
+const NV={estado:'',ocupado:false};
+const nvOk=()=>!!(S.nuvem.url&&S.nuvem.key);
+const nvLig=()=>nvOk()&&!!S.nuvem.token;
+function nvEstado(t,cls){NV.estado=t;NV.cls=cls||'';const el=$('#nvLog');if(el){el.textContent=t;el.className='note '+(cls||'')}}
+async function sb(caminho,opt,semAuth){
+  if(!nvOk())throw new Error('Falta a ligação à nuvem (endereço e chave do projeto).');
+  const o=opt||{};o.headers=Object.assign({'apikey':S.nuvem.key,'Content-Type':'application/json'},o.headers||{});
+  if(!semAuth&&S.nuvem.token)o.headers['Authorization']='Bearer '+S.nuvem.token;
+  let r=await fetch(S.nuvem.url.replace(/\/+$/,'')+caminho,o);
+  if(r.status===401&&!semAuth&&S.nuvem.refresh){
+    if(await nvRenova()){o.headers['Authorization']='Bearer '+S.nuvem.token;r=await fetch(S.nuvem.url.replace(/\/+$/,'')+caminho,o)}
+  }
+  return r;
+}
+async function nvRenova(){
+  try{
+    const r=await sb('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:S.nuvem.refresh})},true);
+    if(!r.ok)return false;
+    const j=await r.json();S.nuvem.token=j.access_token;S.nuvem.refresh=j.refresh_token;save();return true;
+  }catch(e){return false}
+}
+function nvGuardaSessao(j){
+  S.nuvem.token=j.access_token||'';S.nuvem.refresh=j.refresh_token||'';
+  S.nuvem.uid=(j.user&&j.user.id)||S.nuvem.uid;S.nuvem.email=(j.user&&j.user.email)||S.nuvem.email;
+  save();
+}
+async function nvEntrar(email,pass){
+  const r=await sb('/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password:pass})},true);
+  const j=await r.json();
+  if(!r.ok)throw new Error(j.error_description||j.msg||j.message||'Não consegui entrar.');
+  nvGuardaSessao(j);
+}
+async function nvCriar(email,pass){
+  const r=await sb('/auth/v1/signup',{method:'POST',body:JSON.stringify({email,password:pass})},true);
+  const j=await r.json();
+  if(!r.ok)throw new Error(j.error_description||j.msg||j.message||'Não consegui criar a conta.');
+  if(j.access_token)nvGuardaSessao(j);
+  return !j.access_token; // true = falta confirmar o email
+}
+async function nvRecuperar(email){
+  const r=await sb('/auth/v1/recover',{method:'POST',body:JSON.stringify({email})},true);
+  if(!r.ok)throw new Error('Não consegui enviar o email de recuperação.');
+}
+function nvSair(){
+  S.nuvem.token='';S.nuvem.refresh='';S.nuvem.uid='';S.nuvem.email='';S.nuvem.ultima=0;save();
+  nvEstado('Sessão terminada. Os dados continuam guardados neste aparelho.');
+}
+/* ---- junção de dois estados: o mais recente ganha nos conflitos ---- */
+function nvJunta(loc,rem,remNovo){
+  const out=JSON.parse(JSON.stringify(loc));
+  const dicts=['espera','obs','extra','km','xmeta','man'];
+  for(const d of dicts){
+    out[d]=out[d]||{};const r=(rem&&rem[d])||{};
+    for(const k of Object.keys(r)) if(!(k in out[d])||remNovo) out[d][k]=r[k];
+  }
+  if(rem&&Array.isArray(rem.dest)){
+    const vistos=new Set((out.dest||[]).map(x=>JSON.stringify(x)));
+    out.dest=(out.dest||[]).concat(rem.dest.filter(x=>!vistos.has(JSON.stringify(x))));
+  }
+  if(rem&&Array.isArray(rem.ctrlHist)){
+    const vistos=new Set((out.ctrlHist||[]).map(x=>JSON.stringify(x)));
+    out.ctrlHist=(out.ctrlHist||[]).concat(rem.ctrlHist.filter(x=>!vistos.has(JSON.stringify(x))));
+  }
+  if(remNovo&&rem){
+    if(rem.perfil)out.perfil=Object.assign({},out.perfil,rem.perfil);
+    if(rem.contrato)out.contrato=Object.assign({},out.contrato,rem.contrato);
+    if(rem.tz)out.tz=rem.tz;
+    if(rem.bisLim)out.bisLim=rem.bisLim;
+  }else if(rem&&rem.perfil){
+    for(const k of Object.keys(rem.perfil)) if(!out.perfil[k]) out.perfil[k]=rem.perfil[k];
+  }
+  return out;
+}
+function estadoLocal(){
+  return {espera:S.espera,obs:S.obs,extra:S.extra,km:S.km,xmeta:S.xmeta,dest:S.dest,
+          tz:S.tz,ctrlHist:S.ctrlHist,man:S.man,bisLim:S.bisLim,perfil:S.perfil,contrato:S.contrato,carim:S.carim||0};
+}
+async function nvSincroniza(){
+  if(NV.ocupado)return;
+  if(!nvLig()){nvEstado('Entra na conta para sincronizar.','bad');return}
+  NV.ocupado=true;render();
+  try{
+    nvEstado('A sincronizar…');
+    const r=await sb('/rest/v1/dados?select=*&user_id=eq.'+encodeURIComponent(S.nuvem.uid),{method:'GET'});
+    if(!r.ok)throw new Error('A nuvem respondeu '+r.status+' — verifica se criaste as tabelas.');
+    const linhas=await r.json();
+    const remoto=linhas[0]?linhas[0].estado:null;
+    const remCar=linhas[0]?(linhas[0].carimbo||0):0;
+    const junto=nvJunta(estadoLocal(),remoto,remCar>(S.carim||0));
+    Object.assign(S,junto);
+    S.carim=Date.now();
+    const corpo={user_id:S.nuvem.uid,estado:estadoLocal(),carimbo:S.carim,atualizado:new Date().toISOString()};
+    const w=await sb('/rest/v1/dados',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},body:JSON.stringify(corpo)});
+    if(!w.ok){const t=await w.text();throw new Error('Não consegui gravar na nuvem: '+t.slice(0,120))}
+    let nf=0;
+    if(S.nuvem.fich)nf=await nvFicheiros();
+    S.nuvem.ultima=Date.now();save();
+    nvEstado('Sincronizado às '+new Date().toLocaleTimeString('pt-PT').slice(0,5)+(nf?' · '+nf+' ficheiro(s) trazidos da nuvem':''),'ok');
+    NV.ocupado=false;rebuild();
+  }catch(e){
+    NV.ocupado=false;nvEstado('Falhou: '+(e.message||e),'bad');render();
+  }
+}
+/* ---- ficheiros do cartão (.ddd) no armazenamento da conta ---- */
+async function nvFicheiros(){
+  const base='/storage/v1/object';
+  const pasta=S.nuvem.uid;
+  const locais=await IDB.chaves();
+  const r=await sb('/storage/v1/object/list/cartoes',{method:'POST',body:JSON.stringify({prefix:pasta+'/',limit:1000})});
+  const remotos=r.ok?(await r.json()).map(o=>o.name):[];
+  for(const k of locais){
+    if(remotos.includes(k))continue;
+    const ab=await IDB.get(k);
+    if(!ab)continue;
+    await sb(base+'/cartoes/'+encodeURIComponent(pasta)+'/'+encodeURIComponent(k),
+      {method:'POST',headers:{'Content-Type':'application/octet-stream','x-upsert':'true'},body:ab});
+  }
+  let trazidos=0;
+  for(const k of remotos){
+    if(locais.includes(k))continue;
+    const g=await sb(base+'/cartoes/'+encodeURIComponent(pasta)+'/'+encodeURIComponent(k),{method:'GET'});
+    if(!g.ok)continue;
+    const ab=await g.arrayBuffer();
+    try{RAW.push(parseDDD(ab));await IDB.set(k,ab);trazidos++}catch(e){}
+  }
+  return trazidos;
+}
+
+/* ============ CONTRATO E CÁLCULO DO SALÁRIO ============ */
+/* O perfil de trabalho do motorista: escala, horas normais e valores.
+   A app compara cada dia com o que estava previsto e diz o que é extra e quanto vale. */
+const CONTRATO_BASE={
+  escala:[1,1,1,1,1,0,0],        // seg,ter,qua,qui,sex,sáb,dom — 1 = dia previsto
+  turno:'diurno',
+  horasDia:8*60, horasSemana:40*60,
+  base:'trab',                    // 'trab' = Cond+OT+Disp · 'jornada' = porta a porta
+  noiteIni:'22:00', noiteFim:'07:00',
+  noiteAviso:false,               // avisar turnos com trabalho noturno e > 10h de trabalho
+  ampMax:13*60,                   // amplitude máxima de trabalho pretendida (início → fim do turno)
+  ordenado:0, valorHora:0, divisor:173.33, normaisNoOrdenado:true,
+  acr:{extra1:25, extraN:37.5, descanso:50, feriado:50, noturno:25},
+  fixos:{pernoita:{v:0,regra:'meianoite'}, ajudas:{v:0,regra:'dia'}, premio:{v:0,regra:'mes'}}
+};
+function C(){ // contrato com os valores em falta preenchidos
+  const c=Object.assign({},CONTRATO_BASE,S.contrato||{});
+  c.acr=Object.assign({},CONTRATO_BASE.acr,(S.contrato||{}).acr||{});
+  c.fixos=Object.assign({},CONTRATO_BASE.fixos,(S.contrato||{}).fixos||{});
+  c.escala=((S.contrato||{}).escala||CONTRATO_BASE.escala).slice();
+  return c;
+}
+function valorHora(){
+  const c=C();
+  if(c.valorHora>0)return c.valorHora;
+  if(c.ordenado>0&&c.divisor>0)return c.ordenado/c.divisor;
+  return 0;
+}
+function minNoturnos(r){ // minutos do turno dentro da janela noturna
+  const c=C(), ni=parseHM(c.noiteIni), nf=parseHM(c.noiteFim);
+  let tot=0;
+  for(const s of (r.segs||[])){
+    if(s.a===0)continue;                        // pausa não é trabalho
+    for(let d=-1;d<=1;d++){
+      const base=Math.floor(L(s.t0)/1440)*1440+d*1440;
+      let a=base+ni, b=base+nf; if(b<=a)b+=1440;
+      tot+=Math.max(0,Math.min(L(s.t1),b)-Math.max(L(s.t0),a));
+    }
+  }
+  return Math.round(tot);
+}
+function diaSalario(r){
+  const c=C(), vh=valorHora();
+  const dow=(new Date(r.stl*60000).getUTCDay()+6)%7;   // 0 = segunda
+  const base=c.base==='jornada'?r.jornada:r.trabalho;
+  const feriado=FERIADOS.includes(r.iso);
+  const previsto=!!c.escala[dow];
+  const tipo=feriado?'Feriado':(previsto?'Escala':'Fora de escala');
+  const not=minNoturnos(r);
+  let normais=0,e1=0,eN=0,desc=0,fer=0;
+  if(feriado)fer=base;
+  else if(!previsto)desc=base;
+  else{normais=Math.min(base,c.horasDia);
+    const sobra=Math.max(0,base-c.horasDia);
+    e1=Math.min(sobra,60); eN=Math.max(0,sobra-60);}
+  const p=(m,a)=>vh*(m/60)*(1+a/100);
+  const vNormais=c.normaisNoOrdenado?0:vh*(normais/60);
+  const vE1=p(e1,c.acr.extra1), vEN=p(eN,c.acr.extraN);
+  const vDesc=p(desc,c.acr.descanso), vFer=p(fer,c.acr.feriado);
+  const vNot=vh*(not/60)*(c.acr.noturno/100);          // acréscimo noturno, sobre o que já é pago
+  const fora=dISO(new Date(L(r.st)*60000))!==dISO(new Date(L(r.en)*60000)); // turno que atravessa a meia-noite
+  const temNoturno=not>0;
+  const cond=(regra)=>regra==='dia'?base>0:(regra==='noturno'?temNoturno:fora);
+  let fixos=0;const detFix=[];
+  const F=c.fixos;
+  const aplica=(nome,f)=>{if(f&&f.v>0&&cond(f.regra)){fixos+=f.v;detFix.push(nome)}};
+  aplica('pernoita',F.pernoita); aplica('ajudas',F.ajudas);
+  const xm=S.xmeta[r.iso]||{};
+  const extraMan=parseFloat(String(xm.valor||'').replace(',','.'))||0;  // valores lançados à mão na aba Extras
+  const total=vNormais+vE1+vEN+vDesc+vFer+vNot+fixos+extraMan;
+  return {iso:r.iso,dia:r.dia,tipo,previsto,feriado,base,normais,e1,eN,desc,fer,not,fora,
+          vNormais,vE1,vEN,vDesc,vFer,vNot,fixos,detFix,extraMan,total,
+          pago:xm.pago==='Sim',extraDia:!previsto&&!feriado&&base>0};
+}
+function salarioDias(){return ROWS.map(diaSalario)}
+function salarioMeses(){
+  const c=C(),M={};
+  for(const d of salarioDias()){
+    const k=d.iso.slice(0,7);
+    const m=M[k]=M[k]||{k,dias:0,diasExtra:0,base:0,normais:0,e1:0,eN:0,desc:0,fer:0,not:0,valor:0,fixos:0,extraMan:0};
+    m.dias++; if(d.extraDia)m.diasExtra++;
+    for(const f of ['base','normais','e1','eN','desc','fer','not'])m[f]+=d[f];
+    m.valor+=d.total; m.fixos+=d.fixos; m.extraMan+=d.extraMan;
+  }
+  const lista=Object.values(M).sort((a,b)=>a.k<b.k?-1:1);
+  for(const m of lista){
+    if(c.fixos.premio.v>0&&c.fixos.premio.regra==='mes'){m.fixos+=c.fixos.premio.v;m.valor+=c.fixos.premio.v}
+  }
+  return lista;
+}
+function eur(v){return (Math.round(v*100)/100).toFixed(2).replace('.',',')+' €'}
+
+/* ============ MOTOR: linha temporal global → turnos ============ */
+let SEGS=[],SHIFTS=[],ROWS=[],RESTS=[],WEEKS=[],MONTHS={},BIPER=[],IDENT=null,DL=null,VEHS=[],CTRLS=[],EVTS=[],REINT=[];
+function rebuild(){
+  const evMap=new Map(), distMap={};
+  IDENT=null;DL=null;VEHS=[];CTRLS=[];EVTS=[];
+  for(const f of RAW){
+    if(f.ident)IDENT=f.ident;
+    if(f.dl&&(!DL||f.dl>DL))DL=f.dl;
+    VEHS.push(...f.vehicles);CTRLS.push(...f.controls);EVTS.push(...f.events.map(e=>({...e,fault:false})),...f.faults.map(e=>({...e,fault:true})));
+    for(const d of f.days){
+      const key=Math.floor(d.ts/86400);
+      distMap[key]=Math.max(distMap[key]||0,d.dist);
+      for(const c of d.ch)evMap.set(c.t+'_'+c.a+'_'+c.ins,c);
+    }
+  }
+  const ev=[...evMap.values()].sort((a,b)=>a.t-b.t);
+  SEGS=[];
+  for(let j=0;j<ev.length;j++){
+    const end=j+1<ev.length?ev[j+1].t:ev[j].t;
+    if(end>ev[j].t)SEGS.push({t0:ev[j].t,t1:end,a:ev[j].a,ins:ev[j].ins});
+  }
+  // períodos longos com o cartão retirado registados como trabalho/disponibilidade
+  // (entrada manual errada) são tratados como descanso para separar os turnos
+  // funde segmentos contíguos com a mesma atividade e o mesmo estado do cartão
+  // (ex.: período noturno cortado pela meia-noite)
+  {const M=[];for(const s of SEGS){const p=M[M.length-1];
+    if(p&&p.a===s.a&&p.ins===s.ins&&p.t1===s.t0)p.t1=s.t1;else M.push(s)}SEGS=M}
+  // dias inseridos manualmente (discos): sobrepõem-se ao que existir na mesma hora
+  const MSEG=manualSegs();
+  if(MSEG.length){
+    for(const m of MSEG)SEGS=carve(SEGS,m.t0,m.t1);
+    SEGS=SEGS.concat(MSEG).sort((x,y)=>x.t0-y.t0);
+  }
+  // preencher buracos da linha temporal com descanso (dias sem cartão nem registo)
+  {const F=[];for(const s of SEGS){const p=F[F.length-1];
+    if(p&&s.t0>p.t1)F.push({t0:p.t1,t1:s.t0,a:0,ins:false});F.push(s)}SEGS=F}
+  {const M=[];for(const s of SEGS){const p=M[M.length-1];
+    if(p&&p.a===s.a&&p.ins===s.ins&&!!p.man===!!s.man&&!!p.est===!!s.est&&!!p.nosplit===!!s.nosplit&&p.t1===s.t0)p.t1=s.t1;else M.push(s)}SEGS=M}
+  REINT=[];
+  for(const s of SEGS){
+    if(!s.ins&&s.a!==0&&s.t1-s.t0>=REST_TH){REINT.push({t0:s.t0,t1:s.t1,a:s.a});s.a=0}
+  }
+  // turnos
+  SHIFTS=[];let cur=null,j=0;
+  while(j<SEGS.length){
+    const s=SEGS[j];
+    if(s.a===0){
+      let k=j,e=s.t1,ns=!!s.nosplit;
+      while(k+1<SEGS.length&&SEGS[k+1].a===0){k++;e=SEGS[k].t1;ns=ns||!!SEGS[k].nosplit}
+      if(e-s.t0>=REST_TH&&!ns){if(cur){SHIFTS.push(cur);cur=null}}
+      else if(cur)cur.segs.push({t0:s.t0,t1:e,a:0,ins:s.ins});
+      j=k+1;
+    }else{
+      if(!cur)cur={segs:[]};
+      cur.segs.push(s);j++;
+    }
+  }
+  if(cur)SHIFTS.push(cur);
+  // linhas diárias (DADOS)
+  ROWS=SHIFTS.map(sh=>{
+    const st=sh.segs[0].t0, en=sh.segs[sh.segs.length-1].t1;
+    const tot=[0,0,0,0];for(const g of sh.segs)tot[g.a]+=g.t1-g.t0;
+    const stl=L(st), d=new Date(stl*60000), iso=dISO(d);
+    let km=0;const d0=Math.floor(st*60/86400),d1=Math.floor(en*60/86400);
+    for(let k=d0;k<=d1;k++)km+=distMap[k]||0;
+    const esp=Math.min(S.espera[iso]||0,tot[0]);
+    return {iso,dia:DIAS[d.getUTCDay()],st,en,stl,enl:L(en),
+      cond:tot[3],ot:tot[2],disp:tot[1],pausa:tot[0]-esp,esp,
+      trabalho:tot[3]+tot[2]+tot[1], jornada:en-st, km:S.km[iso]??km,
+      obs:S.obs[iso]||'', extra:!!S.extra[iso], segs:sh.segs,
+      man:sh.segs.some(g=>g.man), est:sh.segs.some(g=>g.est)};
+  });
+  // corrigir km duplicado em dias com 2 turnos
+  const seen={};for(const r of ROWS){if(seen[r.iso])r.km=0;seen[r.iso]=1}
+  // descansos entre turnos — lógica do período de 24h (art. 8.º/2 do Reg. 561/2006)
+  // O período de 24h começa no fim do descanso anterior, ou seja, no início do turno.
+  // O descanso diário tem de estar COMPLETO dentro dessas 24h:
+  //   11h dentro das 24h  → regular  (a jornada não pode passar das 13h)
+  //   3h de pausa no turno + 9h a seguir → regular fracionado (art. 4.º g)
+  //   9h dentro das 24h   → reduzido  (jornada até 15h, máx. 3 entre semanais)
+  //   menos de 9h         → infração
+  RESTS=[];
+  for(let k=0;k<ROWS.length-1;k++){
+    const A=ROWS[k],B=ROWS[k+1];
+    const dur=B.st-A.en;                       // descanso real entre turnos
+    const amp=A.en-A.st;                       // amplitude da jornada
+    const jan=A.st+1440;                       // fim do período de 24h
+    const dentro=Math.max(0,Math.min(B.st,jan)-A.en); // descanso gozado dentro das 24h
+    RESTS.push({iso:A.iso,fim:A.en,ini:B.st,dur,amp,jan,dentro,pausaMax:maiorPausa(A),est:!!A.est});
+  }
+  let red=0,lastWkEnd=null;
+  for(const r of RESTS){
+    r.frac=false;r.weekly=false;
+    if(r.dur>=45*60){r.status='SEMANAL REGULAR';r.falta=0;red=0;r.weekly=true}
+    else if(r.dur>=24*60){r.status='SEMANAL REDUZIDO';r.falta=45*60-r.dur;red=0;r.weekly=true}
+    else if(r.dentro>=11*60){r.status='DIÁRIO REGULAR'}
+    else if(r.dentro>=9*60&&r.pausaMax>=3*60&&!r.est){r.status='DIÁRIO REGULAR';r.frac=true}
+    else if(r.dentro>=9*60){r.status='DIÁRIO REDUZIDO';r.fracDuvida=r.est&&r.pausaMax>=3*60;red++}
+    else{r.status='INSUFICIENTE';red++}
+    r.cabe24=r.dentro>=(r.frac?9*60:11*60)||r.weekly&&r.dentro>=11*60; // descanso regular dentro das 24h
+    r.excede24=r.dentro<9*60;                  // nem um reduzido coube nas 24h
+    r.red=red;r.max3=red<=3?'OK':'EXCEDIDO';
+    if(r.weekly){r.gap144=lastWkEnd!=null?(ROWS.find(x=>x.en>lastWkEnd)?.st??r.fim)-lastWkEnd:null;
+      r.h144=lastWkEnd!=null?(r.fim-lastWkEnd):null;lastWkEnd=r.fim+r.dur*0}
+    if(r.weekly)lastWkEnd=r.ini; // fim do descanso semanal = início do turno seguinte
+  }
+  // compensação art. 8.º/6 (alocação do excedente dos descansos seguintes, mais antigo primeiro)
+  const surplus=RESTS.map(r=>r.dur>=24*60?r.dur-24*60:(r.dur>=11*60?r.dur-11*60:0)).slice();
+  for(let a=0;a<RESTS.length;a++){
+    const r=RESTS[a];
+    if(r.status!=='SEMANAL REDUZIDO')continue;
+    const dl=r.ini+21*24*60; let need=r.falta;
+    for(let b=a+1;b<RESTS.length&&need>0;b++){
+      if(RESTS[b].ini>dl)break;
+      const use=Math.min(need,surplus[b]);need-=use;surplus[b]-=use;
+    }
+    const dld=new Date(L(dl)*60000);
+    r.comp=need<=0?'COMPENSADO':('COMPENSAR '+hm(r.falta)+' ATÉ '+dPT(dISO(dld)));
+    r.compOk=need<=0;
+  }
+  // ---- períodos bissemanais: fecham com um descanso ≥ limiar (45h) e reiniciam no turno seguinte ----
+  const LIMB=S.bisLim||45*60;
+  BIPER=[];
+  {let p=null;
+   for(let k=0;k<ROWS.length;k++){
+     const r=ROWS[k];
+     if(!p){p={ini:r.st,iniIso:r.iso,rows:[],cond:0,trab:0,jorn:0,km:0,aberto:true,fecho:null};BIPER.push(p)}
+     p.rows.push(r);r.bi=BIPER.length-1;
+     p.fim=r.en;p.fimIso=r.iso;
+     p.cond+=r.cond;p.trab+=r.trabalho;p.jorn+=r.jornada;p.km+=r.km;
+     r.biC=p.cond;r.biT=p.trab;
+     const rest=RESTS[k];
+     if(rest&&rest.dur>=LIMB){p.fecho=rest;p.aberto=false;p=null}
+   }
+   BIPER.forEach((p,i)=>{p.i=i;p.dias=p.rows.length;p.span=Math.max(1,Math.ceil((p.fim-p.ini)/1440));p.margem=90*60-p.cond});
+  }
+  for(const r of RESTS)r.fechaBis=r.dur>=LIMB;
+  // semanas SEG–DOM
+  const wk={};
+  for(const r of ROWS){
+    const d=new Date(r.stl*60000);const dow=(d.getUTCDay()+6)%7;
+    const mon=new Date(d);mon.setUTCDate(d.getUTCDate()-dow);const k=dISO(mon);
+    r.wk=k;
+    (wk[k]=wk[k]||{k,rows:[]}).rows.push(r);
+  }
+  WEEKS=Object.values(wk).sort((a,b)=>a.k<b.k?-1:1);
+  WEEKS.forEach((w,ix)=>{
+    const sum=f=>w.rows.reduce((s,r)=>s+f(r),0);
+    w.dias=w.rows.length;w.cond=sum(r=>r.cond);w.ot=sum(r=>r.ot);w.disp=sum(r=>r.disp);
+    w.esp=sum(r=>r.esp);w.pausa=sum(r=>r.pausa);w.jorn=sum(r=>r.jornada);w.km=sum(r=>r.km);
+    w.trab=w.cond+w.ot+w.disp;
+    const e=new Date(w.k+'T00:00:00Z');e.setUTCDate(e.getUTCDate()+6);w.kEnd=dISO(e);
+    // média 4 meses (17 semanas a terminar nesta)
+    let s=0,n=0;for(let p=Math.max(0,ix-16);p<=ix;p++){s+=WEEKS[p].trab;n++}
+    w.m4=s/n;
+    // bissemanal = acumulado do período em curso (reinicia após descanso ≥ 45h)
+    const lr=w.rows[w.rows.length-1];
+    w.biIdx=lr.bi;w.bis=lr.biT;w.bisC=lr.biC;
+    w.biNovos=w.rows.filter((r,i)=>i===0?false:r.bi!==w.rows[i-1].bi).length+(ix&&WEEKS[ix-1].rows[WEEKS[ix-1].rows.length-1].bi!==w.rows[0].bi?1:0);
+    w.margem=60*60-w.trab;
+    w.estado=w.trab>60*60?'>60h':(w.trab>=55*60?'ALERTA 55–60h':'OK');
+    w.estM4=w.m4>48*60?'MÉDIA > 48h':'OK';
+    w.ext10=w.rows.filter(r=>r.cond>9*60).length; // extensões: dias com condução > 9h (máx. 2/semana)
+    w.acum=(ix?WEEKS[ix-1].acum:0)+w.jorn;
+  });
+  // meses
+  MONTHS={};
+  for(const r of ROWS){
+    const mk=r.iso.slice(0,7);
+    const m=MONTHS[mk]=MONTHS[mk]||{dias:0,cond:0,ot:0,disp:0,esp:0,pausa:0,jorn:0,km:0,fds:0,sab:0,dom:0,fdsH:0};
+    m.dias++;m.cond+=r.cond;m.ot+=r.ot;m.disp+=r.disp;m.esp+=r.esp;m.pausa+=r.pausa;m.jorn+=r.jornada;m.km+=r.km;
+    if(r.dia==='SÁB'){m.sab++;m.fds++;m.fdsH+=r.jornada}
+    if(r.dia==='DOM'){m.dom++;m.fds++;m.fdsH+=r.jornada}
+  }
+  render();
+}
+
+/* ============ ALERTAS ============ */
+function maiorPausa(r){ // maior pausa contínua dentro do turno (conta para o descanso fracionado 3h+9h)
+  let best=0,run=0,fim=-1;
+  for(const s of (r.segs||[])){
+    if(s.a===0){run=(s.t0===fim?run:0)+(s.t1-s.t0);fim=s.t1;if(run>best)best=run}
+    else{run=0;fim=-1}
+  }
+  return best;
+}
+function condContinua(){ // art. 7.º: pausa de 45 min ou dividida em ≥15 + ≥30 (por esta ordem)
+  // funde segmentos consecutivos da mesma atividade (ex.: descanso cortado pela meia-noite)
+  const M=[];for(const s of SEGS){const p=M[M.length-1];
+    if(p&&p.a===s.a&&p.t1===s.t0&&!!p.est===!!s.est)p.t1=s.t1;else M.push({t0:s.t0,t1:s.t1,a:s.a,est:!!s.est});}
+  const out=[];let acc=0,first=false;
+  for(const s of M){
+    const d=s.t1-s.t0;
+    // dias manuais em modo "totais" não têm a distribuição real das pausas: não são avaliados
+    if(s.est){acc=0;first=false;continue}
+    if(s.a===3){acc+=d;if(acc>270){out.push({t:s.t1,dur:acc});acc=0;first=false}}
+    else if(s.a===0){ // só o descanso/pausa conta como pausa (a disponibilidade não)
+      if(d>=45){acc=0;first=false}
+      else if(d>=30&&first){acc=0;first=false}
+      else if(d>=15&&!first)first=true;
+    }
+  }
+  return out;
+}
+function buildAlerts(){
+  const A=[];const add=(g,iso,scope,txt,lb)=>A.push({g,iso,scope,txt,lb});
+  for(const r of ROWS){
+    if(r.cond>10*60)add('MUITO_GRAVE',r.iso,'dia','Condução diária '+hm(r.cond)+' (> 10h)','Reg. 561/2006, art. 6.º/1');
+    else if(r.cond>9*60)add('LEVE',r.iso,'dia','Condução '+hm(r.cond)+' — extensão a 10h (máx. 2×/semana)','Reg. 561/2006, art. 6.º/1');
+    // limites definidos na aba Conta: amplitude pretendida e trabalho noturno
+    {const c=C();
+      if(c.ampMax&&c.ampMax!==13*60&&r.jornada>c.ampMax&&!(r.jornada>13*60&&c.ampMax<13*60))
+        add('LEVE',r.iso,'dia','Amplitude '+hm(r.jornada)+' acima da definida na Conta ('+hm(c.ampMax)+')','Horário de trabalho (aba Conta)');
+      const nt=minNoturnos(r);
+      if(c.noiteAviso&&nt>0&&r.trabalho>10*60)add('LEVE',r.iso,'dia','Turno com '+hm(nt)+' de trabalho noturno ('+c.noiteIni+'–'+c.noiteFim+') e '+hm(r.trabalho)+' de trabalho (> 10h)','Diretiva 2002/15/CE, art. 7.º — trabalho noturno');
+    }
+    // a amplitude é avaliada junto com o descanso que se lhe segue (lógica das 24h, mais abaixo);
+    // aqui fica só o último turno, que ainda não tem descanso a seguir para ser avaliado
+    if(r===ROWS[ROWS.length-1]){
+      if(r.jornada>15*60)add('GRAVE',r.iso,'dia','Jornada '+hm(r.jornada)+' (> 15h) — nem 9h de descanso cabem nas 24h','Reg. 561/2006, art. 8.º/2');
+      else if(r.jornada>13*60)add('LEVE',r.iso,'dia','Jornada '+hm(r.jornada)+' (> 13h) — o descanso a seguir só pode ser reduzido','Reg. 561/2006, art. 8.º/2');
+    }
+  }
+  for(const w of WEEKS){
+    if(w.cond>56*60)add('MUITO_GRAVE',w.k,'semana','Condução semanal '+hm(w.cond)+' (> 56h)','Reg. 561/2006, art. 6.º/2');
+    if(w.trab>60*60)add('MUITO_GRAVE',w.k,'semana','Trabalho '+hm(w.trab)+' (> 60h)','DL 84/2026, art. 21.º');
+    else if(w.trab>=55*60)add('LEVE',w.k,'semana','Trabalho '+hm(w.trab)+' (55–60h) — margem '+hm(w.margem),'DL 84/2026, art. 21.º (aviso 80%+)');
+    else if(w.trab>=48*60)add('LEVE',w.k,'semana','Trabalho '+hm(w.trab)+' — acima de 80% do limite de 60h','Aviso preventivo');
+    if(w.m4>48*60)add('MUITO_GRAVE',w.k,'semana','Média 4 meses '+hm(w.m4)+' (> 48h)','DL 84/2026, art. 21.º');
+    if(w.ext10>2)add('GRAVE',w.k,'semana',w.ext10+' dias com condução > 9h (máx. 2 extensões)','Reg. 561/2006, art. 6.º/1');
+  }
+  const LIMB=S.bisLim||45*60;
+  for(const p of BIPER){
+    const k=p.rows[p.rows.length-1].wk;
+    const lbl='Bissemanal '+dPT(p.iniIso)+'→'+dPT(p.fimIso)+(p.aberto?' (em curso)':'');
+    if(p.cond>90*60)add('MUITO_GRAVE',k,'semana',lbl+': condução '+hm(p.cond)+' (> 90h)','Reg. 561/2006, art. 6.º/3');
+    else if(p.cond>=0.8*90*60)add('LEVE',k,'semana',lbl+': condução '+hm(p.cond)+' — ≥ 80% do limite de 90h','Aviso preventivo');
+    if(p.span>14)add(p.aberto?'LEVE':'GRAVE',k,'semana',lbl+': '+p.span+' dias sem descanso ≥ '+hm(LIMB)+' — o período bissemanal não fechou em 2 semanas','Reg. 561/2006, art. 8.º/6');
+  }
+  for(const r of RESTS){
+    if(r.status==='INSUFICIENTE'){
+      if(r.amp>15*60)add('MUITO_GRAVE',r.iso,'dia','Jornada de '+hm(r.amp)+' — nas 24h a contar do início só sobraram '+hm(r.dentro)+' de descanso (mínimo 9h)','Reg. 561/2006, art. 8.º/2');
+      else add(r.dur<7*60?'MAXIMA':'MUITO_GRAVE',r.iso,'dia','Descanso após o turno: '+hm(r.dur)+' (< 9h)','Reg. 561/2006, art. 8.º/2');
+    }
+    else if(r.weekly&&r.excede24)add('MUITO_GRAVE',r.iso,'dia','Jornada de '+hm(r.amp)+' antes do descanso semanal — dentro das 24h só couberam '+hm(r.dentro)+' de descanso','Reg. 561/2006, art. 8.º/2');
+    else if(r.status==='DIÁRIO REDUZIDO')add('LEVE',r.iso,'dia',(r.amp>13*60?'Jornada de '+hm(r.amp)+': as 11h já não cabiam nas 24h — ':'')+'descanso reduzido de '+hm(r.dentro)+' dentro das 24h'+(r.fracDuvida?' (houve '+hm(r.pausaMax)+' de pausa no turno, mas o dia foi inserido por totais — passa-o a blocos para contar como fracionado)':''),'Reg. 561/2006, art. 8.º/2 e 8.º/4');
+    if(r.max3==='EXCEDIDO')add('MUITO_GRAVE',r.iso,'dia',r.red+'.º descanso reduzido desde o último semanal (máx. 3)','Reg. 561/2006, art. 8.º/4');
+    if(r.status==='SEMANAL REDUZIDO'&&!r.compOk)add('GRAVE',r.iso,'dia','Semanal reduzido — '+r.comp,'Reg. 561/2006, art. 8.º/6');
+  }
+  const wk=RESTS.filter(r=>r.weekly);
+  for(let k=1;k<wk.length;k++){const gap=wk[k].fim-wk[k-1].ini;
+    if(gap>144*60)add('MUITO_GRAVE',wk[k].iso,'dia','Novo descanso semanal iniciado '+hm(gap)+' após o fim do anterior (> 144h / 6×24h)','Reg. 561/2006, art. 8.º/6');}
+  for(const c of condContinua())add('GRAVE',dISO(new Date(L(c.t)*60000)),'dia','Condução contínua '+hm(c.dur)+' sem pausa de 45 min','Reg. 561/2006, art. 7.º');
+  for(const x of REINT)add('LEVE',dISO(new Date(L(x.t0)*60000)),'dia','Cartão retirado durante '+hm(x.t1-x.t0)+' registado como '+ACTN[x.a].toLowerCase()+' — tratado como descanso na análise (verifica a entrada manual)','Reg. 165/2014, art. 34.º');
+  if(DL){const dias=Math.floor(Date.now()/86400000-DL/86400);
+    if(dias>28)add('GRAVE',dISO(new Date(DL*1000)),'geral','Última descarga do cartão há '+dias+' dias (prazo: 28)','Reg. (UE) 165/2014, art. 33.º');}
+  return A;
+}
+const GRAU={MAXIMA:0,MUITO_GRAVE:1,GRAVE:2,LEVE:3};
+function pior(list){return list.reduce((p,a)=>GRAU[a.g]<GRAU[p]?a.g:p,'LEVE')}
+/* análise dia a dia: um registo por dia civil 00:00–24:00 */
+function diasAnalise(ini,fim){
+  const A=buildAlerts();
+  const byDay={},byWeek={},geral=[];
+  for(const a of A){
+    if(a.scope==='dia')(byDay[a.iso]=byDay[a.iso]||[]).push(a);
+    else if(a.scope==='semana')(byWeek[a.iso]=byWeek[a.iso]||[]).push(a);
+    else geral.push(a);
+  }
+  const rmap={};ROWS.forEach(r=>rmap[r.iso]=r);
+  const restMap={};RESTS.forEach(r=>{if(r.dur>=24*60)restMap[r.iso]=r});
+  const out=[];
+  let d=new Date(ini+'T00:00:00Z');const end=new Date(fim+'T00:00:00Z');
+  while(d<=end){
+    const iso=dISO(d);
+    out.push({iso,dia:DIAS[d.getUTCDay()],r:rmap[iso]||null,al:byDay[iso]||[]});
+    d.setUTCDate(d.getUTCDate()+1);
+  }
+  return {dias:out.reverse(),byWeek,geral};
+}
+function diaLinha(x){
+  const worst=x.al.length?pior(x.al):null;
+  const tagW=worst?`<span class="tag ${worst==='LEVE'?'warn':'bad'}">${worst.replace('_',' ').replace('MAXIMA','MÁXIMA')}</span>`:(x.r?'<span class="tag ok">OK</span>':'<span class="tag dim">DESCANSO</span>');
+  const ach=x.al.map(a=>`<div class="note" style="white-space:normal">• ${esc(a.txt)} <span style="color:var(--faint)">(${esc(a.lb)})</span></div>`).join('');
+  return `<tr><td>${dPT(x.iso)}<div class="note">${x.dia}</div></td>
+    <td class="t">${x.r?clk(x.r.stl)+' → '+clk(x.r.enl):'—'}</td>
+    <td class="t">${x.r?hm(x.r.jornada):'—'}</td>
+    <td class="t">${x.r?hm(x.r.cond):'—'}</td>
+    <td>${x.r?strip(x.r.segs,x.r.st,x.r.en):'<span class="note">sem turno</span>'}</td>
+    <td style="white-space:normal;min-width:200px">${tagW}${ach}</td></tr>`;
+}
+
+/* ============ RENDER ============ */
+const TABS=[['painel','▦','Painel'],['registos','☰','Registos'],['leitor','⭘','Leitor'],['manual','✎','Discos'],['jornada','⏱','Jornada'],['lei84','§','Lei 84'],['descansos','☾','Descansos'],['destinos','⚑','Destinos'],['extras','€','Extras'],['alertas','⚠','Alertas'],['fisc','✓','Fiscalização'],['salario','€','Salário'],['exportar','⇩','Exportar'],['conta','☁','Conta']];
+let TAB='painel',fMes='',fSem='';
+function nav(){
+  $('#tabs').innerHTML=TABS.map(t=>`<button data-t="${t[0]}" class="${TAB===t[0]?'on':''}"><span class="ic">${t[1]}</span>${t[2]}</button>`).join('');
+  $('#tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{TAB=b.dataset.t;render();scrollTo(0,0)});
+}
+function strip(segs,st,en){
+  const day0=Math.floor(L(st)/1440)*1440;let html='<div class="strip" title="00:00 → 24:00">',pos=0;
+  const push=(w,cls)=>{if(w>0)html+=`<i class="${cls}" style="width:${(w/1440*100).toFixed(2)}%"></i>`};
+  const cl=['sR','sA','sW','sD'];
+  for(const g of segs){
+    const a=Math.max(L(g.t0)-day0,0),b=Math.min(L(g.t1)-day0,1440);
+    if(b<=pos)continue;
+    push(a-pos,'sO');push(b-Math.max(a,pos),cl[g.a]);pos=b;
+    if(pos>=1440)break;
+  }
+  push(1440-pos,'sO');return html+'</div>';
+}
+function kpi(lbl,val,cls='',small=''){return `<div class="kpi ${cls}"><span>${lbl}</span><b>${val}</b>${small?`<small>${small}</small>`:''}</div>`}
+function empty(){return `<div class="empty">Ainda sem dados.<br><br><button class="btn amber" onclick="document.getElementById('fileIn').click()">Carregar ficheiros .esm / .ddd</button><br><br><span class="note">Ou lê o cartão direto na aba <b>Leitor</b>, ou insere os dias à mão na aba <b>Discos</b> (discos de tacógrafo / registos em papel).</span></div>`}
+function selMes(){
+  const ms=[...new Set(ROWS.map(r=>r.iso.slice(0,7)))];
+  return `<select id="fMes"><option value="">Todos os meses</option>${ms.map(m=>`<option ${fMes===m?'selected':''} value="${m}">${dPT(m+'-01').slice(3)}</option>`).join('')}</select>
+  <select id="fSem"><option value="">Todas as semanas</option>${WEEKS.map(w=>`<option ${fSem===w.k?'selected':''} value="${w.k}">${dPT(w.k)} – ${dPT(w.kEnd)}</option>`).join('')}</select>`;
+}
+function fRows(){return ROWS.filter(r=>(!fMes||r.iso.slice(0,7)===fMes)&&(!fSem||(r.iso>=fSem&&r.iso<=WEEKS.find(w=>w.k===fSem).kEnd)))}
+
+function render(){
+  nav();
+  const M=$('#main');
+  const P=S.perfil||{};
+  if(IDENT)$('#hDriver').textContent=IDENT.nome+' '+IDENT.ap+' · cartão '+IDENT.card+(DL?' · descarga '+dPT(dISO(new Date(DL*1000))):'');
+  else if(P.nome||P.cartao)$('#hDriver').textContent=[P.nome,P.ap].filter(Boolean).join(' ')+(P.cartao?' · cartão '+P.cartao:'')+(P.empresa?' · '+P.empresa:'');
+  $('#tzSel').value=S.tz;
+  if(!ROWS.length&&!['manual','leitor','conta'].includes(TAB)){M.innerHTML=empty();return}
+  const V={painel,registos,leitor,manual,jornada,lei84,descansos,destinos,extras,alertas,fisc,salario,exportar,conta};
+  M.innerHTML=`<section class="on ${TAB==='fisc'?'print':''}" id="sec">${V[TAB]()}</section>`;
+  bind();
+}
+
+/* ---- Painel ---- */
+function painel(){
+  const T=ROWS.reduce((s,r)=>({j:s.j+r.jornada,c:s.c+r.cond,km:s.km+r.km}),{j:0,c:0,km:0});
+  const gt9=ROWS.filter(r=>r.cond>9*60&&r.cond<=10*60).length, gt10=ROWS.filter(r=>r.cond>10*60).length;
+  const j13=ROWS.filter(r=>r.jornada>13*60).length, j15=ROWS.filter(r=>r.jornada>15*60).length;
+  const sab=ROWS.filter(r=>r.dia==='SÁB').length, dom=ROWS.filter(r=>r.dia==='DOM').length;
+  const fdsH=ROWS.filter(r=>r.dia==='SÁB'||r.dia==='DOM').reduce((s,r)=>s+r.jornada,0);
+  const X=extraRows();const totE=X.reduce((s,x)=>s+(+x.valor||0),0),porR=X.filter(x=>x.pago!=='Sim').reduce((s,x)=>s+(+x.valor||0),0);
+  const mrows=Object.entries(MONTHS).map(([k,m])=>`<tr><td>${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][+k.slice(5,7)-1]} ${k.slice(0,4)}</td><td class="t">${m.dias}</td><td class="t">${hm(m.jorn)}</td><td class="t">${hm(m.cond)}</td><td class="t">${hm(m.ot)}</td><td class="t">${hm(m.disp)}</td><td class="t">${hm(m.esp)}</td><td class="t">${hm(m.pausa)}</td><td class="t">${m.km}</td><td class="t">${hm(m.jorn/m.dias)}</td><td class="t">${m.fds}</td></tr>`).join('');
+  return `<div class="kgrid">
+    ${kpi('Dias trabalhados',ROWS.length)}${kpi('Horas totais',hm(T.j))}
+    ${kpi('Média horas/dia',hm(T.j/ROWS.length))}${kpi('KM totais',T.km)}
+    ${kpi('Média KM/dia',Math.round(T.km/ROWS.length))}${kpi('% Condução',(T.c/T.j*100).toFixed(1)+'%')}</div>
+  <h2>Alertas legais</h2><div class="kgrid">
+    ${kpi('Condução > 9h',gt9,gt9?'warn':'ok','limite diário — extensões')}
+    ${kpi('Condução > 10h',gt10,gt10?'bad':'ok','máx. extensão')}
+    ${kpi('Jornada > 13h',j13,j13?'warn':'ok','dias')}${kpi('Jornada > 15h',j15,j15?'bad':'ok','dias')}</div>
+  <h2>Fins-de-semana</h2><div class="kgrid">
+    ${kpi('Sábados trabalhados',sab)}${kpi('Domingos trabalhados',dom)}${kpi('Horas em fins-de-semana',hm(fdsH))}</div>
+  <h2>Extras (€)</h2><div class="kgrid">
+    ${kpi('Total registado',totE.toFixed(2)+' €')}${kpi('Por receber',porR.toFixed(2)+' €',porR?'warn':'ok')}
+    ${kpi('Recebido',(totE-porR).toFixed(2)+' €','ok')}${kpi('Dias extra',X.length)}</div>
+  <h2>Resumo mensal</h2><div class="tw"><table><tr><th>Mês</th><th>Dias</th><th>Horas</th><th>Condução</th><th>Outros</th><th>Disp.</th><th>Espera Doc.</th><th>Pausa</th><th>KM</th><th>Média h/dia</th><th>FDS</th></tr>${mrows}</table></div>`;
+}
+
+/* ---- Registos (DADOS) ---- */
+function registos(){
+  const rows=fRows().map(r=>`<tr>
+    <td>${dPT(r.iso)}<div class="note">${r.dia}${r.extra?' · <span class="tag warn">EXTRA</span>':''}${r.man?' · <span class="tag info">DISCO</span>':''}</div></td>
+    <td class="t">${clk(r.stl)}</td><td class="t">${clk(r.enl)}</td>
+    <td class="t"><b>${hm(r.trabalho+r.esp)}</b></td>
+    <td class="t">${hm(r.cond)}</td><td class="t">${hm(r.ot)}</td><td class="t">${hm(r.disp)}</td>
+    <td class="t"><input class="mini eEsp" data-d="${r.iso}" value="${r.esp?hm(r.esp):''}" placeholder="0:00" aria-label="Espera doc."></td>
+    <td class="t">${hm(r.pausa)}</td>
+    <td class="t"><input class="mini eKm" data-d="${r.iso}" value="${r.km||''}" placeholder="0" aria-label="KM"></td>
+    <td>${strip(r.segs,r.st,r.en)}</td>
+    <td><input class="obs eObs" data-d="${r.iso}" value="${esc(r.obs)}" placeholder="destino / notas"></td>
+    <td><input type="checkbox" class="chk eExt" data-d="${r.iso}" ${r.extra?'checked':''} aria-label="Extra"></td></tr>`).join('');
+  return `<div class="row">${selMes()}</div>
+  <div class="legend"><span><i style="background:var(--drive)"></i>Condução</span><span><i style="background:var(--work)"></i>Outros trabalhos</span><span><i style="background:var(--avail)"></i>Disponibilidade</span><span><i style="background:#1d2733;border:1px solid var(--line)"></i>Pausa</span></div>
+  <div class="tw"><table><tr><th>Data</th><th>Início</th><th>Fim</th><th>Total</th><th>Condução</th><th>Outros</th><th>Disp.</th><th>Espera Doc.</th><th>Pausa</th><th>KM</th><th>Dia 00–24h</th><th>Observações</th><th>Extra</th></tr>${rows}</table></div>
+  <p class="note">Total = Condução + Outros + Disponibilidade + Espera Doc. A Espera Doc. é reclassificada por ti a partir da Pausa (escreve h:mm). Observações, KM e Extra são editáveis; o resto vem do cartão.</p>`;
+}
+
+/* ---- Leitor de cartão ---- */
+function leitor(){
+  const tem=typeof navigator!=='undefined'&&!!navigator.usb;
+  const lig=!!RD.dev;
+  const disp=AND?andLista():[];
+  return `<div class="card">
+    <div class="row" style="margin:0">
+      <span class="sem ${lig?'g':'y'}"></span>
+      <b>${lig?'Leitor ligado — '+esc(RD.dev.productName||'leitor de cartões'):'Nenhum leitor ligado'}</b>
+      ${AND?'<span class="tag ok">APP ANDROID</span>':'<span class="tag dim">PÁGINA WEB</span>'}
+    </div>
+    <p class="note" style="margin-top:8px">Liga o leitor ao telemóvel com um cabo OTG, mete o cartão de condutor com o chip para dentro e escolhe o leitor. A app só lê: nunca escreve nada no cartão.</p>
+    ${lig?`<div class="row noprint">
+      <button class="btn amber" id="rdLer" ${RD.busy?'disabled':''}>${RD.busy?'A ler…':'⭘ Ler cartão'}</button>
+      <button class="btn" id="rdOff">Desligar</button>
+      ${RD.ddd?`<button class="btn" id="rdSave">⇩ Guardar .ddd</button>`:''}</div>`
+    :AND?(disp.length?`<div class="row noprint">${disp.map(d=>`<button class="btn amber rdDev" data-id="${d.id}">⚡ ${esc(d.nome||('USB '+d.vid+':'+d.pid))}</button>`).join('')}</div>
+      <p class="note">Aparelhos USB ligados agora. Se o leitor não estiver na lista, verifica o cabo OTG.</p>`
+      :`<div class="row noprint"><button class="btn" id="rdRefresh">↻ Procurar leitores</button></div>
+      <p class="note">Nenhum aparelho USB detetado. Liga o leitor pelo cabo OTG e procura outra vez.</p>`)
+    :`<div class="row noprint">
+      <button class="btn amber" id="rdOn" ${tem?'':'disabled'}>⚡ Ligar ao leitor</button>
+      <button class="btn" id="rdAll" ${tem?'':'disabled'}>Ver todos os aparelhos</button></div>`}
+    ${(tem||AND)?'':'<div class="alert MAXIMA"><span class="g">SEM SUPORTE</span> · Este browser não tem WebUSB. No Android usa o Chrome, ou instala a app própria; no iPhone não é possível.</div>'}
+  </div>
+  <h2>Registo da leitura</h2>
+  <div class="card" style="padding:10px 12px"><div id="rdLog" class="mono" style="font-size:11.5px;max-height:260px;overflow:auto;line-height:1.6">${RD.log.length?RD.log.map(l=>`<div class="${l.cls}">${esc(l.t)}</div>`).join(''):'<span class="note">Ainda sem leituras.</span>'}</div></div>
+  ${RD.bloqueado?`<div class="alert MUITO_GRAVE"><span class="g">LIMITAÇÃO DO BROWSER</span> · O Chrome bloqueia o acesso a leitores de smart card a partir de páginas web (classe USB 0x0B, protegida desde 2018 por causa de um problema de segurança com chaves U2F). Nenhum site consegue contornar isto — só uma app instalada. Vê as alternativas em baixo.<div class="lb">WebUSB — lista de classes de interface protegidas</div></div>`:''}
+  ${AND?`<h2>Estás na app instalada</h2>
+  <div class="card"><p class="note">Aqui o acesso ao leitor é feito pelo próprio Android, sem a limitação do Chrome: qualquer leitor CCID normal deve funcionar. Se algum não funcionar, manda-me o texto do registo em cima.</p></div>`
+  :`<h2>Alternativas</h2>
+  <div class="card"><p class="note">
+  <b>1.</b> Instalar esta app como app Android (o projeto está no repositório, em <b>android/</b>) — o leitor passa a funcionar.<br><br>
+  <b>2.</b> Usar uma app de leitura já feita (<b>TahoReader</b>, <b>Driver Card Reader</b>), exportar o <b>.ddd</b> e trazê-lo para aqui com <b>＋ Ficheiros</b>. A análise é a mesma.</p></div>`}
+  <h2>Notas</h2>
+  <div class="card"><p class="note">
+  · O NFC não serve: o cartão de condutor é de contactos.<br><br>
+  · A app descarrega a 1.ª geração da aplicação de tacógrafo, presente em todos os cartões, e monta um .ddd.<br><br>
+  · É uma <b>cópia de trabalho</b>: a descarga oficial dos 28 dias continua a ser feita como sempre.</p></div>`;
+}
+
+/* ---- Salário: escala, horas e valores ---- */
+function salario(){
+  const c=C(), vh=valorHora();
+  const DIAS=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+  const dias=salarioDias(), meses=salarioMeses();
+  const tot=meses.reduce((a,m)=>({dias:a.dias+m.dias,diasExtra:a.diasExtra+m.diasExtra,e1:a.e1+m.e1,eN:a.eN+m.eN,
+    desc:a.desc+m.desc,fer:a.fer+m.fer,not:a.not+m.not,valor:a.valor+m.valor}),
+    {dias:0,diasExtra:0,e1:0,eN:0,desc:0,fer:0,not:0,valor:0});
+  const mesAtual=meses[meses.length-1];
+  const num=(k,lab,val,ph)=>`<label class="note" style="min-width:120px">${lab}<input class="mini" data-c="${k}" value="${val}" placeholder="${ph||''}"></label>`;
+  const linhas=dias.slice().reverse().map(d=>`<tr>
+    <td>${dPT(d.iso)}<div class="note">${d.dia}</div></td>
+    <td><span class="tag ${d.feriado?'bad':d.previsto?'dim':'warn'}">${d.tipo}</span></td>
+    <td class="t">${hm(d.base)}</td><td class="t">${d.normais?hm(d.normais):'—'}</td>
+    <td class="t">${d.e1?hm(d.e1):'—'}</td><td class="t">${d.eN?hm(d.eN):'—'}</td>
+    <td class="t">${d.desc?hm(d.desc):'—'}</td><td class="t">${d.fer?hm(d.fer):'—'}</td>
+    <td class="t">${d.not?hm(d.not):'—'}</td>
+    <td class="t">${d.fixos?eur(d.fixos):'—'}</td>
+    <td class="t">${d.extraMan?eur(d.extraMan)+(d.pago?' <span class="tag ok">pago</span>':''):'—'}</td>
+    <td class="t"><b>${eur(d.total)}</b></td></tr>`).join('');
+  const linhasMes=meses.slice().reverse().map(m=>`<tr>
+    <td>${dPT(m.k+'-01').slice(3)}</td><td class="t">${m.dias}</td><td class="t">${m.diasExtra||'—'}</td>
+    <td class="t">${hm(m.base)}</td><td class="t">${hm(m.normais)}</td>
+    <td class="t">${m.e1?hm(m.e1):'—'}</td><td class="t">${m.eN?hm(m.eN):'—'}</td>
+    <td class="t">${m.desc?hm(m.desc):'—'}</td><td class="t">${m.fer?hm(m.fer):'—'}</td>
+    <td class="t">${m.not?hm(m.not):'—'}</td><td class="t">${eur(m.fixos)}</td><td class="t">${m.extraMan?eur(m.extraMan):'—'}</td>
+    <td class="t"><b>${eur(m.valor)}</b></td></tr>`).join('');
+  return `<p class="note">Aqui defines como trabalhas e quanto vales à hora. A app compara cada dia dos registos com a tua escala e separa o que é normal do que é extra.</p>
+  ${vh?'':'<div class="alert GRAVE"><span class="g">FALTAM VALORES</span> · Sem ordenado base nem valor à hora, as contas dão zero. Preenche em baixo.</div>'}
+  <div class="kgrid">
+    ${kpi('A receber — '+(mesAtual?dPT(mesAtual.k+'-01').slice(3):'—'),mesAtual?eur(mesAtual.valor):'—','','mês em curso')}
+    ${kpi('Horas extra do mês',mesAtual?hm(mesAtual.e1+mesAtual.eN):'—',mesAtual&&(mesAtual.e1+mesAtual.eN)>0?'warn':'ok')}
+    ${kpi('Dias fora de escala',mesAtual?mesAtual.diasExtra:'—',mesAtual&&mesAtual.diasExtra?'warn':'ok','no mês')}
+    ${kpi('Horas noturnas',mesAtual?hm(mesAtual.not):'—','','no mês')}
+    ${kpi('Valor à hora',vh?eur(vh):'—','',c.valorHora>0?'definido':'ordenado ÷ '+c.divisor)}
+    ${kpi('Total do período',eur(tot.valor),'',tot.dias+' dias')}</div>
+
+  <h2>A minha escala</h2>
+  <div class="card">
+    <div class="row">${DIAS.map((d,i)=>`<label class="note"><input type="checkbox" class="cEsc" data-i="${i}" ${c.escala[i]?'checked':''}> ${d}</label>`).join('')}</div>
+    <p class="note">Marca os dias que estás obrigado a trabalhar. Um dia trabalhado fora destes conta como <b>dia de descanso trabalhado</b>, pago ao acréscimo respetivo.</p>
+    <div class="row">
+      ${num('horasDia','Horas normais/dia',hm(c.horasDia),'8:00')}
+      ${num('horasSemana','Horas normais/semana',hm(c.horasSemana),'40:00')}
+      <label class="note">Turno base<select data-c="turno">${['diurno','noturno','misto'].map(t=>`<option ${c.turno===t?'selected':''}>${t}</option>`).join('')}</select></label>
+    </div>
+    <div class="row">
+      <label class="note">O que conta como trabalho<select data-c="base">
+        <option value="trab" ${c.base==='trab'?'selected':''}>Condução + Outros + Disponibilidade</option>
+        <option value="jornada" ${c.base==='jornada'?'selected':''}>Jornada porta a porta</option></select></label>
+      ${num('noiteIni','Noite começa',c.noiteIni,'22:00')}${num('noiteFim','Noite acaba',c.noiteFim,'07:00')}
+    </div>
+  </div>
+
+  <h2>Quanto valho à hora</h2>
+  <div class="card">
+    <div class="row">
+      ${num('ordenado','Ordenado base (€/mês)',c.ordenado||'','1000')}
+      ${num('divisor','Divisor mensal',c.divisor,'173.33')}
+      ${num('valorHora','ou valor à hora (€)',c.valorHora||'','6.50')}
+    </div>
+    <div class="row"><label class="note"><input type="checkbox" data-c="normaisNoOrdenado" ${c.normaisNoOrdenado?'checked':''}> As horas normais já vêm no ordenado (só somar os extras)</label></div>
+    <p class="note">Se receberes ao mês, deixa o visto: o total mostrado é o que <b>acresce</b> ao ordenado. O divisor 173,33 é o habitual para 40h por semana.</p>
+  </div>
+
+  <h2>Acréscimos (%)</h2>
+  <div class="card">
+    <div class="row">
+      ${num('acr.extra1','1.ª hora extra',c.acr.extra1,'25')}
+      ${num('acr.extraN','Horas seguintes',c.acr.extraN,'37.5')}
+      ${num('acr.descanso','Dia de descanso',c.acr.descanso,'50')}
+      ${num('acr.feriado','Feriado',c.acr.feriado,'50')}
+      ${num('acr.noturno','Trabalho noturno',c.acr.noturno,'25')}
+    </div>
+    <p class="note">Vêm preenchidos com os mínimos do Código do Trabalho (art. 268.º). <b>O contrato coletivo do sector costuma pagar mais</b> — confirma no teu recibo ou no CCT e corrige aqui.</p>
+  </div>
+
+  <h2>Valores fixos</h2>
+  <div class="card">
+    <div class="row">
+      ${num('fixos.pernoita.v','Pernoita (€)',c.fixos.pernoita.v||'','')}
+      <label class="note">quando<select data-c="fixos.pernoita.regra">${[['meianoite','turno que passa a meia-noite'],['noturno','turno com trabalho noturno'],['dia','todos os dias trabalhados']].map(([v,t])=>`<option value="${v}" ${c.fixos.pernoita.regra===v?'selected':''}>${t}</option>`).join('')}</select></label>
+    </div>
+    <div class="row">
+      ${num('fixos.ajudas.v','Ajudas de custo (€)',c.fixos.ajudas.v||'','')}
+      <label class="note">quando<select data-c="fixos.ajudas.regra">${[['dia','todos os dias trabalhados'],['meianoite','turno que passa a meia-noite'],['noturno','turno com trabalho noturno']].map(([v,t])=>`<option value="${v}" ${c.fixos.ajudas.regra===v?'selected':''}>${t}</option>`).join('')}</select></label>
+    </div>
+    <div class="row">${num('fixos.premio.v','Prémio mensal (€)',c.fixos.premio.v||'','')}</div>
+  </div>
+  <div class="row"><button class="btn amber" id="cGuardar">Guardar e recalcular</button><button class="btn" id="cRepor">Repor valores da lei</button></div>
+
+  <h2>Resumo por mês</h2>
+  <div class="tw"><table><tr><th>Mês</th><th>Dias</th><th>Fora de escala</th><th>Trabalho</th><th>Normais</th><th>Extra 1.ª</th><th>Extra segs.</th><th>Descanso</th><th>Feriado</th><th>Noturnas</th><th>Fixos</th><th>Extras lançados</th><th>A receber</th></tr>${linhasMes}</table></div>
+
+  <h2>Dia a dia</h2>
+  <div class="tw"><table><tr><th>Data</th><th>Tipo</th><th>Trabalho</th><th>Normais</th><th>Extra 1.ª</th><th>Extra segs.</th><th>Descanso</th><th>Feriado</th><th>Noturnas</th><th>Fixos</th><th>Extras lançados</th><th>Valor</th></tr>${linhas}</table></div>
+  <p class="note">"Descanso" e "Feriado" são as horas desses dias, pagas por inteiro ao acréscimo respetivo. As noturnas são as horas de trabalho entre ${c.noiteIni} e ${c.noiteFim} — o valor mostrado é só o acréscimo, porque essas horas já estão contadas nas outras colunas. Isto é uma estimativa para conferires o recibo, não um documento oficial.</p>`;
+}
+
+/* ---- Conta: perfil do condutor + sincronização ---- */
+function conta(){
+  const P=S.perfil||{},N=S.nuvem||{};
+  const campo=(k,lab,ph)=>`<label class="note" style="min-width:140px">${lab}<input data-p="${k}" value="${esc(P[k]||'')}" placeholder="${ph||''}"></label>`;
+  const ult=N.ultima?new Date(N.ultima).toLocaleString('pt-PT').replace(',',' ·'):'nunca';
+  return `<h2 style="margin-top:0">Perfil do condutor</h2>
+  <p class="note">Aparece no cabeçalho, no dossier de fiscalização e nas exportações. Serve sobretudo para os dias inseridos à mão: quando carregas um ficheiro do cartão, o nome e o número vêm de lá.</p>
+  <div class="card">
+    <div class="row">${campo('nome','Nome próprio')}${campo('ap','Apelido')}${campo('cartao','N.º do cartão')}</div>
+    <div class="row">${campo('empresa','Empresa')}${campo('matricula','Matrícula habitual','__-__-__')}${campo('base','Base / centro operacional')}</div>
+    <div class="row">${campo('contacto','Contacto','telefone ou email')}</div>
+    <div class="row"><button class="btn amber" id="pGuardar">Guardar perfil</button>
+    ${IDENT?`<button class="btn" id="pDoCartao">Preencher a partir do cartão lido</button>`:''}</div>
+  </div>
+
+  ${(()=>{const c=C();
+    const acima=ROWS.filter(r=>r.jornada>c.ampMax).length;
+    const comNoite=ROWS.filter(r=>minNoturnos(r)>0);
+    const totNoite=comNoite.reduce((s,r)=>s+minNoturnos(r),0);
+    return `<h2>Horário de trabalho</h2>
+  <p class="note">A amplitude é o tempo do início ao fim do turno (porta a porta). A janela noturna é a mesma usada na aba Salário para as horas noturnas — muda num sítio e fica nos dois.</p>
+  <div class="card">
+    <div class="row">
+      <label class="note">Amplitude máxima de trabalho (h:mm)<input id="hAmp" value="${hm(c.ampMax)}" placeholder="13:00" inputmode="numeric" style="width:110px"></label>
+      <label class="note">Início do trabalho noturno<input id="hNi" type="time" value="${esc(c.noiteIni)}"></label>
+      <label class="note">Fim do trabalho noturno<input id="hNf" type="time" value="${esc(c.noiteFim)}"></label>
+    </div>
+    <div class="row"><label class="note"><input type="checkbox" id="hAviso" ${c.noiteAviso?'checked':''}> Avisar nos Alertas quando um turno com trabalho noturno passa das 10h de trabalho</label></div>
+    <div class="row"><button class="btn amber" id="hGuardar">Guardar horário</button><button class="btn" id="hRepor">Repor (13:00 · 22:00–07:00)</button></div>
+    <div class="kgrid" style="margin-top:8px">
+      ${kpi('Turnos acima de '+hm(c.ampMax),acima,acima?'warn':'ok','amplitude definida')}
+      ${kpi('Turnos com trabalho noturno',comNoite.length,'',c.noiteIni+' → '+c.noiteFim)}
+      ${kpi('Horas noturnas (total)',hm(totNoite),'','todo o período')}</div>
+    <p class="note">Limite legal da amplitude: até 13h o descanso diário pode ser regular; de 13h a 15h só cabe reduzido; acima de 15h é infração (Reg. 561/2006, art. 8.º/2). Se definires um valor diferente de 13:00, a aba Alertas avisa também quando o passares. Com a opção ligada, turnos com trabalho noturno e mais de 10h de trabalho ficam assinalados (Diretiva 2002/15/CE, art. 7.º).</p>
+  </div>`})()}
+
+  <h2>Conta e sincronização</h2>
+  <div class="card">
+    <div class="row" style="margin:0"><span class="sem ${nvLig()?'g':nvOk()?'y':''}"></span>
+      <b>${nvLig()?'Ligado como '+esc(N.email||'(sem email)'):nvOk()?'Configurado — falta entrar':'Sincronização não configurada'}</b></div>
+    ${nvLig()?`<p class="note" style="margin-top:8px">Última sincronização: ${ult}. Os dados vivem no aparelho; a nuvem é uma cópia. Sem rede, a app trabalha na mesma.</p>
+      <div class="row">
+        <button class="btn amber" id="nvSync" ${NV.ocupado?'disabled':''}>${NV.ocupado?'A sincronizar…':'↻ Sincronizar agora'}</button>
+        <button class="btn" id="nvOut">Terminar sessão</button>
+      </div>
+      <div class="row">
+        <label class="note"><input type="checkbox" id="nvAuto" ${N.auto?'checked':''}> Sincronizar ao abrir</label>
+        <label class="note"><input type="checkbox" id="nvFich" ${N.fich?'checked':''}> Incluir os ficheiros do cartão</label>
+      </div>`
+    :nvOk()?`<div class="row"><input id="nvEmail" placeholder="email" value="${esc(N.email||'')}"><input id="nvPass" type="password" placeholder="palavra-passe"></div>
+      <div class="row"><button class="btn amber" id="nvIn">Entrar</button><button class="btn" id="nvNew">Criar conta</button><button class="btn" id="nvRec">Esqueci-me</button></div>`
+    :`<p class="note" style="margin-top:8px">Precisas de um projeto Supabase (gratuito) para guardar os dados. As instruções e o SQL estão no ficheiro <b>NUVEM.md</b> do repositório — leva cerca de dez minutos, uma vez só.</p>`}
+    <div id="nvLog" class="note ${NV.cls||''}" style="margin-top:8px">${esc(NV.estado||'')}</div>
+  </div>
+
+  <h2>Ligação ao projeto</h2>
+  <div class="card">
+    <div class="row"><label class="note" style="flex:1">Endereço do projeto<input id="nvUrl" value="${esc(N.url||'')}" placeholder="https://xxxx.supabase.co"></label></div>
+    <div class="row"><label class="note" style="flex:1">Chave pública (anon)<input id="nvKey" value="${esc(N.key||'')}" placeholder="eyJhbGciOi..."></label></div>
+    <div class="row"><button class="btn" id="nvSalvarCfg">Guardar ligação</button>${nvOk()?`<button class="btn danger" id="nvLimpaCfg">Remover ligação</button>`:''}</div>
+    <p class="note">A chave anon é pública por natureza — o que protege os dados é a regra de acesso por utilizador (RLS) que o SQL cria: cada conta só vê as suas próprias linhas e os seus próprios ficheiros.</p>
+  </div>
+
+  <h2>O que é sincronizado</h2>
+  <div class="card"><p class="note">
+  Perfil, observações, KM, esperas, dias marcados como extra, destinos, controlos, dias inseridos à mão e as preferências (fuso, limiar da bissemanal). Com a opção ligada, também os ficheiros <b>.ddd</b> do cartão.<br><br>
+  Em caso de conflito entre aparelhos, junta-se tudo: dias e notas que só existam num lado são mantidos, e nos que existirem dos dois lados fica a versão do aparelho que gravou por último.<br><br>
+  Guarda na mesma o backup JSON na aba Exportar de vez em quando. A nuvem é comodidade, não é arquivo — e o plano gratuito do Supabase não tem cópias de segurança.</p></div>`;
+}
+
+/* ---- Discos / inserção manual ---- */
+function novoDraft(){return {d:'',src:'Disco',ini:'',fim:'',modo:'tot',cond:'',ot:'',disp:'',km:'',obs:'',blocos:[]}}
+let MDRAFT=novoDraft();
+function manJorn(m){let a=parseHM(m.ini),b=parseHM(m.fim);if(b<=a)b+=1440;return b-a}
+function manCond(m){
+  if(m.modo==='blk')return (m.blocos||[]).reduce((s,x)=>{if(+x.a!==3||!x.ini||!x.fim)return s;let a=parseHM(x.ini),b=parseHM(x.fim);if(b<=a)b+=1440;return s+(b-a)},0);
+  return parseHM(m.cond);
+}
+function manual(){
+  const D=MDRAFT;
+  const ds=Object.keys(S.man).sort().reverse();
+  const jo=D.ini&&D.fim?manJorn(D):0;
+  const somaT=parseHM(D.cond)+parseHM(D.ot)+parseHM(D.disp);
+  const conflito=D.d&&ROWS.some(r=>r.iso===D.d&&!r.man);
+  const rows=ds.map(d=>{const m=S.man[d];
+    return `<tr><td>${dPT(d)}</td><td>${esc(m.src||'Disco')}</td>
+    <td class="t">${esc(m.ini)} → ${esc(m.fim)}</td><td class="t">${hm(manJorn(m))}</td><td class="t">${hm(manCond(m))}</td>
+    <td>${m.modo==='blk'?'<span class="tag info">BLOCOS</span>':'<span class="tag dim">TOTAIS</span>'}</td>
+    <td class="note" style="white-space:normal;max-width:180px">${esc(S.obs[d]||'')}</td>
+    <td class="noprint"><button class="btn mEd" data-d="${d}">✎ Editar</button> <button class="btn danger mDel" data-d="${d}">✕</button></td></tr>`}).join('');
+  const blocos=(D.blocos||[]).map((b,i)=>`<div class="row" style="margin:6px 0">
+    <select class="mBA" data-i="${i}">${ACTN.map((n,ai)=>`<option value="${ai}" ${+b.a===ai?'selected':''}>${n}</option>`).join('')}</select>
+    <input type="time" class="mBI" data-i="${i}" value="${esc(b.ini)}"><span class="note">→</span><input type="time" class="mBF" data-i="${i}" value="${esc(b.fim)}">
+    <button class="btn danger mBDel" data-i="${i}" aria-label="Remover bloco">✕</button></div>`).join('');
+  return `<p class="note">Para dias em que usaste <b>disco de tacógrafo</b> (ou outro registo em papel) e não há dados no cartão. Os dias inseridos aqui entram em <b>todas</b> as análises — jornada, Lei 84, bissemanais, descansos, alertas e fiscalização — tal como os dias lidos do cartão. As horas são na hora local selecionada no cabeçalho (${S.tz==='utc'?'UTC':'Portugal'}).</p>
+  <h2>${S.man[D.d]?'Editar dia '+dPT(D.d):'Novo dia'}</h2>
+  <div class="card">
+    <div class="row">
+      <label class="note">Data <input type="date" data-m="d" value="${esc(D.d)}"></label>
+      <label class="note">Origem <select data-m="src">${['Disco','Registo manual','Outro veículo','Ausência'].map(o=>`<option ${D.src===o?'selected':''}>${o}</option>`).join('')}</select></label>
+      <label class="note">Início <input type="time" data-m="ini" value="${esc(D.ini)}"></label>
+      <label class="note">Fim <input type="time" data-m="fim" value="${esc(D.fim)}"></label>
+    </div>
+    ${conflito?'<div class="alert GRAVE"><span class="g">ATENÇÃO</span> · Já existem dados do cartão nesse dia. Se guardares, o período indicado substitui o que está no cartão nessas horas.</div>':''}
+    <div class="row">
+      <label class="note">Modo
+      <select data-m="modo"><option value="tot" ${D.modo!=='blk'?'selected':''}>Totais do dia</option><option value="blk" ${D.modo==='blk'?'selected':''}>Blocos (hora a hora)</option></select></label>
+      ${jo?`<span class="chip">Jornada ${hm(jo)}</span>`:''}
+      ${D.modo!=='blk'&&jo?`<span class="chip" style="${somaT>jo?'color:var(--bad)':''}">Pausa ${hm(Math.max(jo-somaT,0))}</span>`:''}
+    </div>
+    ${D.modo==='blk'?`
+      <p class="note">Cada bloco é um troço do dia lido no disco (ex.: condução 06:00→09:30). O tempo que sobrar dentro do turno conta como pausa. Com blocos, a app verifica também as pausas do art. 7.º.</p>
+      ${blocos}
+      <div class="row"><button class="btn" id="mAddB">＋ Bloco</button></div>`
+    :`
+      <div class="row">
+        <label class="note">Condução <input class="mini" data-m="cond" value="${esc(D.cond)}" placeholder="0:00"></label>
+        <label class="note">Outros trab. <input class="mini" data-m="ot" value="${esc(D.ot)}" placeholder="0:00"></label>
+        <label class="note">Disponibilidade <input class="mini" data-m="disp" value="${esc(D.disp)}" placeholder="0:00"></label>
+      </div>
+      <p class="note">O resto da jornada é contado como pausa. Sem os horários exatos das pausas, este dia não é avaliado quanto à regra das 4h30 de condução contínua (art. 7.º) — usa o modo <b>Blocos</b> se quiseres essa verificação.</p>`}
+    <div class="row">
+      <label class="note">KM <input class="mini" data-m="km" value="${esc(D.km)}" placeholder="0"></label>
+      <label class="note">Observações <input class="obs" data-m="obs" value="${esc(D.obs)}" placeholder="destino / notas"></label>
+    </div>
+    <div class="row"><button class="btn amber" id="mSave">Guardar dia</button><button class="btn" id="mNew">Limpar</button></div>
+  </div>
+  <h2>Dias inseridos manualmente (${ds.length})</h2>
+  ${ds.length?`<div class="tw"><table><tr><th>Data</th><th>Origem</th><th>Turno</th><th>Jornada</th><th>Condução</th><th>Modo</th><th>Observações</th><th class="noprint"></th></tr>${rows}</table></div>`
+  :'<div class="empty">Ainda não há dias inseridos à mão.</div>'}`;
+}
+
+/* ---- Jornada total ---- */
+function jornada(){
+  const T=ROWS.reduce((s,r)=>({j:s.j+r.jornada,c:s.c+r.cond,o:s.o+r.ot,de:s.de+r.disp+r.esp}),{j:0,c:0,o:0,de:0});
+  const rows=WEEKS.map(w=>`<tr><td>${dPT(w.k)}</td><td>${dPT(w.kEnd)}</td><td class="t">${w.dias}</td><td class="t">${hm(w.cond)}</td><td class="t">${hm(w.ot)}</td><td class="t">${hm(w.disp)}</td><td class="t">${hm(w.esp)}</td><td class="t">${hm(w.pausa)}</td><td class="t"><b>${hm(w.jorn)}</b></td><td class="t">${hm(w.jorn/w.dias)}</td><td class="t">${hm(w.acum)}</td></tr>`).join('');
+  return `<div class="kgrid">
+    ${kpi('Jornada acumulada',hm(T.j))}${kpi('Condução',hm(T.c))}${kpi('Outros trabalhos',hm(T.o))}
+    ${kpi('Disp. + Espera',hm(T.de))}${kpi('Média jornada/dia',hm(T.j/ROWS.length))}${kpi('Média jornada/semana',hm(T.j/WEEKS.length))}</div>
+  <h2>Tabela semanal — jornada porta-a-porta</h2>
+  <div class="tw"><table><tr><th>Semana (início)</th><th>Fim</th><th>Dias</th><th>Condução</th><th>Outros</th><th>Disp.</th><th>Espera</th><th>Pausa</th><th>Jornada</th><th>Média/dia</th><th>Acumulado</th></tr>${rows}</table></div>`;
+}
+
+/* ---- Lei 84/2026 ---- */
+function lei84(){
+  const now=Date.now()/60000;const cw=WEEKS[WEEKS.length-1];
+  const cur=WEEKS.find(w=>{const a=Date.parse(w.k)/60000,b=a+7*1440;return now>=a&&now<b})||cw;
+  const over=WEEKS.filter(w=>w.trab>60*60).length, al=WEEKS.filter(w=>w.trab>=55*60&&w.trab<=60*60).length;
+  const worst=WEEKS.reduce((a,b)=>b.trab>a.trab?b:a,WEEKS[0]);
+  const pct=Math.min(cur.trab/(60*60)*100,100);
+  const LIMB=S.bisLim||45*60;
+  const pa=BIPER.length?BIPER[BIPER.length-1]:null;          // período bissemanal em curso
+  const pctB=pa?Math.min(pa.cond/(90*60)*100,100):0;
+  const rows=WEEKS.map(w=>`<tr><td>${dPT(w.k)}</td><td>${dPT(w.kEnd)}</td><td class="t">${w.dias}</td>
+    <td class="t"><b>${hm(w.trab)}</b><div class="bar ${w.trab>60*60?'bad':w.trab>=48*60?'warn':''}" style="margin-top:3px;width:90px"><i style="width:${Math.min(w.trab/(60*60)*100,100)}%"></i></div></td>
+    <td class="t">${hm(w.jorn)}</td><td class="t">${hm(w.m4)}</td><td class="t">${hm(w.margem)}</td>
+    <td><span class="tag ${w.estado==='OK'?'ok':w.estado.startsWith('ALERTA')?'warn':'bad'}">${w.estado}</span></td>
+    <td><span class="tag ${w.estM4==='OK'?'ok':'bad'}">${w.estM4}</span></td>
+    <td class="t">${hm(w.cond)}</td>
+    <td class="t">#${(w.biIdx??0)+1}${w.biNovos?' <span class="tag info">REINÍCIO</span>':''}</td>
+    <td class="t">${hm(w.bis)}</td>
+    <td class="t">${hm(w.bisC)}${w.bisC>90*60?' <span class="tag bad">>90h</span>':w.bisC>=0.8*90*60?' <span class="tag warn">80%</span>':''}</td></tr>`).join('');
+  const prows=[...BIPER].reverse().map(p=>`<tr>
+    <td>#${p.i+1}${p.aberto?' <span class="tag warn">EM CURSO</span>':''}</td>
+    <td>${dPT(p.iniIso)}<div class="note">${clk(L(p.ini))}</div></td>
+    <td>${dPT(p.fimIso)}<div class="note">${clk(L(p.fim))}</div></td>
+    <td class="t">${p.dias}</td><td class="t">${p.span}${p.span>14?' <span class="tag bad">>14</span>':''}</td>
+    <td class="t"><b>${hm(p.cond)}</b><div class="bar ${p.cond>90*60?'bad':p.cond>=0.8*90*60?'warn':''}" style="margin-top:3px;width:90px"><i style="width:${Math.min(p.cond/(90*60)*100,100)}%"></i></div></td>
+    <td class="t">${hm(p.margem)}</td><td class="t">${hm(p.trab)}</td><td class="t">${hm(p.jorn)}</td>
+    <td>${p.fecho?`<span class="tag ok">${hm(p.fecho.dur)}</span><div class="note">${dPT(p.fecho.iso)}</div>`:'<span class="tag dim">—</span>'}</td>
+    <td><span class="tag ${p.cond>90*60?'bad':p.cond>=0.8*90*60?'warn':'ok'}">${p.cond>90*60?'> 90h':p.cond>=0.8*90*60?'≥ 80%':'OK'}</span></td></tr>`).join('');
+  return `<p class="note">Art. 21.º do DL 84/2026: máx. <b>60h de trabalho/semana</b> e <b>média de 48h em 4 meses</b>. Trabalho = Condução + Outros Trabalhos + Disponibilidade. Condução bissemanal ≤ 90h (Reg. 561/2006, art. 6.º/3).</p>
+  <div class="kgrid">
+    ${kpi('Semana atual '+dPT(cur.k).slice(0,5)+'–'+dPT(cur.kEnd).slice(0,5),hm(cur.trab),cur.trab>60*60?'bad':cur.trab>=48*60?'warn':'ok')}
+    ${kpi('Margem até 60h',hm(cur.margem),cur.margem<5*60?'bad':cur.margem<12*60?'warn':'ok')}
+    ${kpi('Bissemanal atual',pa?hm(pa.trab):'—','','desde '+(pa?dPT(pa.iniIso):'—')+' · Cond+OT+Disp')}
+    ${kpi('Condução na bissemanal',pa?hm(pa.cond):'—',pa&&pa.cond>90*60?'bad':pa&&pa.cond>=0.8*90*60?'warn':'ok','limite 90h')}
+    ${kpi('Margem até 90h',pa?hm(pa.margem):'—',pa&&pa.margem<0?'bad':pa&&pa.margem<10*60?'warn':'ok')}
+    ${kpi('Dias na bissemanal',pa?pa.dias+' / '+pa.span+' corridos':'—',pa&&pa.span>14?'warn':'')}
+    ${kpi('Média 4 meses',hm(cur.m4),cur.m4>48*60?'bad':cur.m4>0.8*48*60?'warn':'ok','limite 48h')}
+    ${kpi('Semanas > 60h',over,over?'bad':'ok')}${kpi('Semanas 55–60h',al,al?'warn':'ok')}
+    ${kpi('Pior semana',hm(worst.trab),'',dPT(worst.k))}</div>
+  <div class="card"><div class="note" style="margin-bottom:6px">Progresso da semana atual até às 60h ${pct>=80?'<span class="tag warn">≥ 80% — atenção</span>':''}</div>
+  <div class="bar ${pct>=100?'bad':pct>=80?'warn':''}"><i style="width:${pct}%"></i></div>
+  <div class="note" style="margin:10px 0 6px">Progresso da bissemanal em curso até às 90h de condução ${pctB>=80?'<span class="tag warn">≥ 80% — atenção</span>':''}</div>
+  <div class="bar ${pctB>=100?'bad':pctB>=80?'warn':''}"><i style="width:${pctB}%"></i></div></div>
+  <h2>Períodos bissemanais — entre descansos ≥ ${hm(LIMB)}</h2>
+  <div class="row noprint"><label class="note">Descanso que fecha a bissemanal:</label>
+    <select id="bisLim"><option value="2700" ${LIMB===2700?'selected':''}>≥ 45:00</option><option value="2701" ${LIMB===2701?'selected':''}>&gt; 45:00 (45:01)</option></select></div>
+  <div class="tw"><table><tr><th>#</th><th>Início</th><th>Fim</th><th>Dias trab.</th><th>Dias corridos</th><th>Condução</th><th>Margem 90h</th><th>Trabalho</th><th>Jornada</th><th>Fechado por</th><th>Estado</th></tr>${prows}</table></div>
+  <p class="note">A contagem bissemanal <b>reinicia sempre que existe um descanso de ${hm(LIMB)} ou mais</b>: esse descanso fecha o período anterior e o período novo começa no turno seguinte. O último período fica <b>em curso</b> até surgir o próximo descanso ≥ ${hm(LIMB)}. Se um período passar dos 14 dias corridos, é sinalizado (o descanso semanal deve iniciar-se no máx. 6×24h após o fim do anterior — art. 8.º/6).</p>
+  <h2>Tabela semanal — média e bissemanal</h2>
+  <div class="tw"><table><tr><th>Início</th><th>Fim</th><th>Dias</th><th>Trabalho</th><th>Jornada</th><th>Média 4m</th><th>Margem 60h</th><th>Estado</th><th>Média</th><th>Condução</th><th>Bissem. #</th><th>Acum. bissem.</th><th>Cond. bissem.</th></tr>${rows}</table></div>
+  <p class="note">Nas colunas bissemanais, cada semana mostra o acumulado do período em curso <b>até ao fim dessa semana</b> (e não a soma de duas semanas civis). "REINÍCIO" marca as semanas em que um descanso ≥ ${hm(LIMB)} abriu um novo período.</p>`;
+}
+
+/* ---- Descansos ---- */
+function descansos(){
+  const last=RESTS[RESTS.length-1],min=RESTS.reduce((a,b)=>b.dur<a.dur?b:a,RESTS[0]);
+  const fora=RESTS.filter(r=>r.excede24).length;
+  const longas=RESTS.filter(r=>r.amp>13*60).length;
+  const rows=RESTS.map(r=>{
+    const cls={'DIÁRIO REGULAR':'ok','DIÁRIO REDUZIDO':'warn','INSUFICIENTE':'bad','SEMANAL REDUZIDO':'info','SEMANAL REGULAR':'ok'}[r.status];
+    const ampCls=r.amp>15*60?'bad':r.amp>13*60?'warn':'ok';
+    return `<tr><td>${dPT(r.iso)}</td><td class="t">${clk(L(r.fim))}</td><td class="t">${clk(L(r.ini))}</td>
+    <td class="t"><span class="tag ${ampCls}">${hm(r.amp)}</span></td>
+    <td class="t">${clk(L(r.jan))}<div class="note">${dPT(dISO(new Date(L(r.jan)*60000)))}</div></td>
+    <td class="t"><b>${hm(r.dentro)}</b>${r.frac?'<div class="note">+ '+hm(r.pausaMax)+' de pausa no turno</div>':''}</td>
+    <td class="t">${hm(r.dur)}</td>
+    <td><span class="tag ${cls}">${r.status}</span>${r.frac?' <span class="tag info">FRACIONADO</span>':''}${r.fracDuvida?' <span class="tag warn">PAUSA POR CONFIRMAR</span>':''}${r.fechaBis?' <span class="tag info">FECHA BISSEMANAL</span>':''}</td>
+    <td class="t">${r.red}</td><td><span class="tag ${r.max3==='OK'?'ok':'bad'}">${r.max3}</span></td>
+    <td class="t">${r.falta?hm(r.falta):'—'}</td><td>${r.comp?`<span class="tag ${r.compOk?'ok':'warn'}">${r.comp}</span>`:'—'}</td></tr>`}).join('');
+  return `<div class="kgrid">
+    ${kpi('Último descanso',hm(last.dur),last.dur<9*60?'bad':last.dur<11*60?'warn':'ok',last.status)}
+    ${kpi('Dentro das 24h',hm(last.dentro),last.dentro<9*60?'bad':last.dentro<11*60?'warn':'ok','jornada de '+hm(last.amp))}
+    ${kpi('Descanso mínimo',hm(min.dur),'',dPT(min.iso))}
+    ${kpi('Reduzidos desde o semanal',last.red,last.red>3?'bad':last.red===3?'warn':'ok','máx. 3')}
+    ${kpi('Jornadas > 13h',longas,longas?'warn':'ok','já não cabem 11h nas 24h')}
+    ${kpi('Fora das 24h',fora,fora?'bad':'ok','nem 9h couberam')}</div>
+  <p class="note"><b>Como é calculado.</b> O período de 24 horas conta a partir do fim do descanso anterior, ou seja, do início do turno. O descanso diário tem de estar <b>completo dentro dessas 24 horas</b> (art. 8.º/2). Daí sai tudo o resto:<br><br>
+  · Jornada até <b>13h</b> → sobram 11h ou mais nas 24h → <b>DIÁRIO REGULAR</b>.<br>
+  · Jornada entre <b>13h e 15h</b> → já só cabem 9h a 11h → <b>DIÁRIO REDUZIDO</b> (máx. 3 entre dois descansos semanais, art. 8.º/4).<br>
+  · Jornada acima de <b>15h</b> → nem um descanso reduzido cabe → <b>infração</b>.<br>
+  · <b>FRACIONADO</b>: uma pausa de 3h ou mais dentro do turno mais 9h seguidas a seguir contam como descanso regular (art. 4.º, alínea g). Em dias inseridos à mão no modo <b>Totais</b> não se sabe onde ficou a pausa, por isso fica marcado <b>PAUSA POR CONFIRMAR</b> e conta como reduzido — passa esse dia a modo <b>Blocos</b> para valer como regular.<br><br>
+  A coluna "Dentro das 24h" mostra a parte do descanso que caiu dentro da janela — é essa que decide, não a duração total. Um descanso longo que comece tarde de mais continua a ser insuficiente.<br><br>
+  Descansos semanais: ≥24h REDUZIDO · ≥45h REGULAR. Compensação do semanal reduzido até ao fim da 3.ª semana seguinte (art. 8.º/6), agregada a outro descanso ≥ 9h. Regra 144h: novo descanso semanal ≤ 6×24h após o fim do anterior. Um descanso de ${hm(S.bisLim||45*60)} ou mais <b>fecha o período bissemanal</b> (ver aba Lei 84). O repouso semanal regular não pode ser gozado no veículo; regresso a casa/base a cada 4 semanas.</p>
+  <div class="tw"><table><tr><th>Data</th><th>Fim do turno</th><th>Início seguinte</th><th>Jornada</th><th>Fim das 24h</th><th>Dentro das 24h</th><th>Descanso total</th><th>Status</th><th>Red.</th><th>Regra máx. 3</th><th>Falta (45h)</th><th>Compensação</th></tr>${rows}</table></div>`;
+}
+
+/* ---- Destinos ---- */
+function destinos(){
+  const agg=S.dest.map(([nome,kw])=>{
+    const rs=ROWS.filter(r=>r.obs.toLowerCase().includes(kw.toLowerCase()));
+    return {nome,kw,dias:rs.length,h:rs.reduce((s,r)=>s+r.jornada,0),c:rs.reduce((s,r)=>s+r.cond,0),km:rs.reduce((s,r)=>s+r.km,0)};
+  });
+  const rows=agg.map((a,i)=>`<tr><td>${esc(a.nome)}</td><td class="note">${esc(a.kw)}</td><td class="t">${a.dias}</td><td class="t">${hm(a.h)}</td><td class="t">${hm(a.c)}</td><td class="t">${a.km}</td><td class="t">${a.dias?Math.round(a.km/a.dias):0}</td><td><button class="btn danger dDel" data-i="${i}" aria-label="Remover">✕</button></td></tr>`).join('');
+  return `<p class="note">Conta os dias cujas Observações contêm a palavra-chave.</p>
+  <div class="tw"><table><tr><th>Destino</th><th>Palavra-chave</th><th>Dias</th><th>Horas</th><th>Condução</th><th>KM</th><th>KM/dia</th><th></th></tr>${rows}</table></div>
+  <div class="row"><input id="dNome" placeholder="Destino"><input id="dKw" placeholder="palavra-chave"><button class="btn amber" id="dAdd">Adicionar destino</button></div>`;
+}
+
+/* ---- Extras ---- */
+function extraRows(){
+  return ROWS.filter(r=>r.extra||r.dia==='SÁB'||r.dia==='DOM'||FERIADOS.includes(r.iso)).map(r=>{
+    const m=S.xmeta[r.iso]||{};
+    const tipo=m.tipo||(FERIADOS.includes(r.iso)?'Feriado':r.dia==='SÁB'?'Sábado':r.dia==='DOM'?'Domingo':'Outro');
+    return {iso:r.iso,dia:r.dia,tipo,obs:r.obs,h:r.jornada,km:r.km,valor:m.valor||'',pago:m.pago||'Não',notas:m.notas||''};
+  });
+}
+function extras(){
+  const X=extraRows();
+  const tot=X.reduce((s,x)=>s+(+x.valor||0),0),por=X.filter(x=>x.pago!=='Sim').reduce((s,x)=>s+(+x.valor||0),0);
+  const rows=X.map(x=>`<tr><td>${dPT(x.iso)}</td><td>${x.dia}</td>
+    <td><select class="xT" data-d="${x.iso}">${['Sábado','Domingo','Feriado','Pernoite','Outro'].map(o=>`<option ${x.tipo===o?'selected':''}>${o}</option>`).join('')}</select></td>
+    <td class="note" style="white-space:normal;max-width:220px">${esc(x.obs)}</td>
+    <td class="t">${hm(x.h)}</td><td class="t">${x.km}</td>
+    <td class="t"><input class="mini xV" data-d="${x.iso}" value="${x.valor}" placeholder="€"></td>
+    <td><select class="xP" data-d="${x.iso}"><option ${x.pago==='Sim'?'selected':''}>Sim</option><option ${x.pago!=='Sim'?'selected':''}>Não</option></select></td>
+    <td><input class="obs xN" data-d="${x.iso}" value="${esc(x.notas)}" placeholder="notas"></td></tr>`).join('');
+  return `<div class="kgrid">${kpi('Total registado',tot.toFixed(2)+' €')}${kpi('Por receber',por.toFixed(2)+' €',por?'warn':'ok')}${kpi('Recebido',(tot-por).toFixed(2)+' €','ok')}${kpi('Dias extra',X.length)}</div>
+  <p class="note">Automático: aparece cada dia com Extra = SIM (nos Registos) ou trabalhado a sábado, domingo ou feriado. O Tipo é sugerido pelo dia; valores e estado de pagamento são teus.</p>
+  <div class="tw"><table><tr><th>Data</th><th>Dia</th><th>Tipo</th><th>Observações</th><th>Horas</th><th>KM</th><th>Valor (€)</th><th>Pago?</th><th>Notas</th></tr>${rows}</table></div>`;
+}
+
+/* ---- Alertas ---- */
+function alertas(){
+  const ini=fMes?fMes+'-01':(fSem||ROWS[0].iso);
+  let fim=dISO(new Date());
+  if(fMes){const e=new Date(fMes+'-01T00:00:00Z');e.setUTCMonth(e.getUTCMonth()+1);e.setUTCDate(0);fim=dISO(e)}
+  if(fSem)fim=WEEKS.find(w=>w.k===fSem).kEnd;
+  const {dias,byWeek,geral}=diasAnalise(ini,fim);
+  const nInf=dias.filter(x=>x.al.length).length;
+  const dl=DL?Math.floor(Date.now()/86400000-DL/86400):null;
+  const cov=ROWS.length?Math.round((Date.now()/60000-ROWS[0].st)/1440):0;
+  const wks=Object.keys(byWeek).filter(k=>k>=ini.slice(0,10)&&k<=fim||true).sort().reverse()
+    .filter(k=>{const w=WEEKS.find(w=>w.k===k);return w&&w.kEnd>=ini&&w.k<=fim});
+  return `<div class="kgrid">
+    ${kpi('Dias analisados',dias.length)}
+    ${kpi('Dias com achados',nInf,nInf?'warn':'ok')}
+    ${kpi('Última descarga',dl==null?'—':dl+' dias',dl>28?'bad':dl>21?'warn':'ok','prazo 28 dias')}
+    ${kpi('Cobertura de registos',cov+' dias',cov>=56?'ok':'warn','mín. 56 + dia atual')}</div>
+  ${geral.map(a=>`<div class="alert ${a.g}"><span class="g">${a.g.replace('_',' ')}</span> · ${esc(a.txt)}<div class="lb">${esc(a.lb)}</div></div>`).join('')}
+  <h2>Dias em incumprimento — jornada 00:00–24:00</h2>
+  <div class="row">${selMes()}</div>
+  ${dias.some(x=>x.al.length)?`<div class="tw"><table><tr><th>Data</th><th>Turno</th><th>Jornada</th><th>Condução</th><th>Dia 00–24h</th><th>Achados do dia</th></tr>
+  ${dias.filter(x=>x.al.length).map(diaLinha).join('')}</table></div>
+  <p class="note">${dias.filter(x=>x.al.length).length} de ${dias.length} dias com achados; os restantes estão em conformidade.</p>`
+  :`<div class="empty">Nenhum dia em incumprimento nos ${dias.length} dias do período. 🟢</div>`}
+  <h2>Alertas semanais</h2>
+  ${wks.length?wks.map(k=>{const w=WEEKS.find(w=>w.k===k);
+    return `<div class="card"><b>Semana ${dPT(k)} – ${dPT(w.kEnd)}</b>
+    ${byWeek[k].map(a=>`<div class="alert ${a.g}" style="margin:8px 0 0"><span class="g">${a.g.replace('_',' ')}</span> · ${esc(a.txt)}<div class="lb">${esc(a.lb)}</div></div>`).join('')}</div>`}).join('')
+    :'<div class="empty">Sem alertas semanais no período. 🟢</div>'}`;
+}
+
+/* ---- Fiscalização ---- */
+function fisc(){
+  const hoje=dISO(new Date());
+  const d0=new Date();d0.setUTCDate(d0.getUTCDate()-56);
+  const ini=dISO(d0)<ROWS[0].iso?ROWS[0].iso:dISO(d0);
+  const {dias,byWeek,geral}=diasAnalise(ini,hoje);
+  const wksWin=Object.keys(byWeek).sort().reverse().filter(k=>{const w=WEEKS.find(w=>w.k===k);return w&&w.kEnd>=ini});
+  const winAl=[...dias.flatMap(x=>x.al),...wksWin.flatMap(k=>byWeek[k]),...geral];
+  const worst=winAl.some(a=>a.g==='MAXIMA'||a.g==='MUITO_GRAVE')?'r':winAl.length?'y':'g';
+  const dl=DL?Math.floor(Date.now()/86400000-DL/86400):999;
+  const cov=ROWS.length?(Date.now()/60000-ROWS[0].st)/1440:0;
+  const cw=WEEKS[WEEKS.length-1];
+  // o checklist avalia apenas a janela de fiscalização (56 dias + dia atual)
+  const rowsW=ROWS.filter(r=>r.iso>=ini), weeksW=WEEKS.filter(w=>w.kEnd>=ini), restsW=RESTS.filter(r=>r.iso>=ini);
+  const iniMin=Date.parse(ini+'T00:00:00Z')/60000;
+  const chk=[
+    ['Cartão de condutor válido e identificado',!!IDENT,'Reg. 165/2014'],
+    ['Descarga do cartão dentro dos 28 dias',dl<=28,'Reg. 165/2014, art. 33.º'],
+    ['Registos cobrem 56 dias + dia atual',cov>=56,'Reg. 165/2014, art. 36.º'],
+    ['Sem condução diária > 10h na janela',!rowsW.some(r=>r.cond>10*60),'561/2006, art. 6.º/1'],
+    ['Máx. 2 extensões a 10h por semana',!weeksW.some(w=>w.ext10>2),'561/2006, art. 6.º/1'],
+    ['Pausas de 45 min a cada 4h30 de condução',!condContinua().some(c=>c.t>=iniMin),'561/2006, art. 7.º'],
+    ['Descanso diário completo dentro das 24h',!restsW.some(r=>r.excede24),'561/2006, art. 8.º/2'],
+    ['Máx. 3 descansos diários reduzidos entre semanais',!restsW.some(r=>r.max3==='EXCEDIDO'),'561/2006, art. 8.º/4'],
+    ['Descansos semanais e compensações em dia',!restsW.some(r=>r.status==='SEMANAL REDUZIDO'&&!r.compOk),'561/2006, art. 8.º/6'],
+    ['Condução ≤ 90h em cada bissemanal (entre descansos ≥ '+hm(S.bisLim||45*60)+')',!BIPER.some(p=>p.fimIso>=ini&&p.cond>90*60),'561/2006, art. 6.º/3'],
+    ['Trabalho semanal ≤ 60h e média 4 meses ≤ 48h',!weeksW.some(w=>w.trab>60*60||w.m4>48*60),'DL 84/2026, art. 21.º']];
+  const hist=[...CTRLS.map(c=>({t:c.t/60,txt:'Controlo lido do cartão — matrícula '+(c.reg||'—')})),...(S.ctrlHist||[]).map(h=>({t:Date.parse(h.d)/60000,txt:h.txt+' (manual)'}))].sort((a,b)=>b.t-a.t);
+  const P=S.perfil||{};
+  const idLinha=IDENT?(IDENT.nome+' '+IDENT.ap+' · cartão '+IDENT.card)
+    :([P.nome,P.ap].filter(Boolean).join(' ')+(P.cartao?' · cartão '+P.cartao:''));
+  return `${(idLinha.trim()||P.empresa)?`<div class="card"><b>${esc(idLinha.trim()||'—')}</b><div class="note">${[P.empresa,P.matricula,P.base].filter(Boolean).map(esc).join(' · ')||''}</div></div>`:''}
+  <div class="card"><span class="sem ${worst}"></span><b>${worst==='g'?'Verde — em conformidade na janela de controlo':worst==='y'?'Amarelo — avisos na janela de 56 dias':'Vermelho — infrações graves na janela de 56 dias'}</b>
+  <div class="note" style="margin-top:4px">Janela de fiscalização: ${dPT(ini)} → ${dPT(hoje)} (dia atual + 56 anteriores) · Semana atual: ${hm(cw.trab)} de trabalho, margem ${hm(cw.margem)}.${BIPER.length?' · Bissemanal em curso desde '+dPT(BIPER[BIPER.length-1].iniIso)+': '+hm(BIPER[BIPER.length-1].cond)+' de condução (margem '+hm(BIPER[BIPER.length-1].margem)+').':''}${rowsW.some(r=>r.man)?' · '+rowsW.filter(r=>r.man).length+' dia(s) da janela inseridos à mão (discos) — leva os registos em papel contigo.':''}</div></div>
+  <h2>Checklist de inspeção (10 pontos)</h2>
+  <div class="tw"><table>${chk.map(c=>`<tr><td>${c[1]?'✅':'❌'}</td><td style="white-space:normal">${c[0]}</td><td class="note">${c[2]}</td></tr>`).join('')}</table></div>
+  ${geral.map(a=>`<div class="alert ${a.g}"><span class="g">${a.g.replace('_',' ')}</span> · ${esc(a.txt)}<div class="lb">${esc(a.lb)}</div></div>`).join('')}
+  <h2>Dias em incumprimento na janela — jornada 00:00–24:00</h2>
+  ${dias.some(x=>x.al.length)?`<div class="tw"><table><tr><th>Data</th><th>Turno</th><th>Jornada</th><th>Condução</th><th>Dia 00–24h</th><th>Achados do dia</th></tr>
+  ${dias.filter(x=>x.al.length).map(diaLinha).join('')}</table></div>
+  <p class="note">${dias.filter(x=>x.al.length).length} de ${dias.length} dias com achados; os restantes estão em conformidade.</p>`
+  :`<div class="empty">Nenhum dia em incumprimento nos ${dias.length} dias da janela. 🟢</div>`}
+  <p class="note">Sugestão para achados: regularizar o padrão em causa nas semanas seguintes e anotar a justificação no verso do registo, quando aplicável (art. 12.º do Reg. 561/2006).</p>
+  <h2>Semanas com achados na janela</h2>
+  ${wksWin.length?wksWin.map(k=>{const w=WEEKS.find(w=>w.k===k);
+    return `<div class="card"><b>Semana ${dPT(k)} – ${dPT(w.kEnd)}</b>
+    ${byWeek[k].map(a=>`<div class="alert ${a.g}" style="margin:8px 0 0"><span class="g">${a.g.replace('_',' ')}</span> · ${esc(a.txt)}<div class="lb">${esc(a.lb)}</div></div>`).join('')}</div>`}).join('')
+    :'<div class="empty">Sem achados semanais na janela. 🟢</div>'}
+  <h2>Histórico de controlos</h2>
+  ${hist.length?`<div class="tw"><table>${hist.map(h=>`<tr><td>${dPT(dISO(new Date(h.t*60000)))}</td><td style="white-space:normal">${esc(h.txt)}</td></tr>`).join('')}</table></div>`:'<p class="note">Sem controlos registados no cartão.</p>'}
+  <div class="row noprint"><input id="cD" type="date"><input id="cT" placeholder="descrição do controlo"><button class="btn" id="cAdd">Registar controlo</button>
+  <button class="btn amber" onclick="window.print()">🖨 Dossier PDF</button></div>`;
+}
+
+/* ---- Exportar ---- */
+function exportar(){
+  return `<div class="grid2">
+  <div class="card"><h2 style="margin-top:0">Excel (formato da aba DADOS)</h2><p class="note">Mesmas colunas e ordem do livro modelo. Precisa de internet na 1.ª vez (biblioteca).</p><br><button class="btn amber" id="exXlsx">⇩ Exportar .xlsx</button></div>
+  <div class="card"><h2 style="margin-top:0">CSV</h2><p class="note">Tabela DADOS em CSV (compatível com Excel).</p><br><button class="btn" id="exCsv">⇩ Exportar .csv</button></div>
+  <div class="card"><h2 style="margin-top:0">PDF</h2><p class="note">Dossier de fiscalização pronto a imprimir/guardar como PDF.</p><br><button class="btn" id="exPdf">🖨 Gerar dossier</button></div>
+  <div class="card"><h2 style="margin-top:0">JSON — backup das notas</h2><p class="note">Observações, espera doc., extras, destinos, controlos e <b>dias inseridos à mão (discos)</b>. Faz este backup com regularidade: os dias manuais só existem neste dispositivo.</p><br>
+  <div class="row"><button class="btn" id="exJson">⇩ Backup</button><button class="btn" id="imJson">⇪ Restaurar</button><input type="file" id="jsonIn" accept=".json" hidden></div></div>
+  </div>
+  <div class="card"><h2 style="margin-top:0">Repor</h2><p class="note">Apaga as notas e os dias inseridos à mão neste dispositivo (os ficheiros do cartão não são afetados). Exporta o backup JSON antes.</p><br><button class="btn danger" id="exWipe">Apagar notas manuais</button></div>`;
+}
+
+/* ============ EVENTOS / EXPORTS ============ */
+function parseHM(v){const m=String(v).trim().match(/^(\d{1,2})[:hH.]?(\d{0,2})$/);return m?(+m[1])*60+(+m[2]||0):0}
+function dadosMatrix(){
+  const head=['Data','Dia','Início','Fim','Total','Condução','Outros Trabalhos','Disponibilidade','Espera Doc.','Pausa','KM','Observações','Mês','Extra','Origem'];
+  const rows=ROWS.map(r=>[dPT(r.iso),r.dia,dPT(r.iso)+' '+clk(r.stl),dPT(dISO(new Date(L(r.en)*60000)))+' '+clk(r.enl),
+    hm(r.trabalho+r.esp),hm(r.cond),hm(r.ot),hm(r.disp),hm(r.esp),hm(r.pausa),r.km,r.obs,dPT(r.iso.slice(0,7)+'-01').slice(3),r.extra?'SIM':'',r.man?(S.man[r.iso]&&S.man[r.iso].src||'Disco'):'Cartão']);
+  return [head,...rows];
+}
+function download(name,blob){
+  if(AND&&AND.guardar){
+    const fr=new FileReader();
+    fr.onload=()=>{try{const r=AND.guardar(name,String(fr.result).split(',')[1]);alert(r||('Guardado em Transferências: '+name))}catch(e){alert('Não consegui guardar o ficheiro.')}};
+    fr.readAsDataURL(blob);return;
+  }
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+if(AND&&AND.imprimir&&typeof window!=='undefined')window.print=()=>{try{AND.imprimir()}catch(e){}};
+function bind(){
+  document.querySelectorAll('#fMes,#fSem').forEach(el=>el.onchange=e=>{if(e.target.id==='fMes'){fMes=e.target.value;fSem=''}else{fSem=e.target.value;fMes=''}render()});
+  document.querySelectorAll('.eEsp').forEach(el=>el.onchange=e=>{S.espera[e.target.dataset.d]=parseHM(e.target.value);save();rebuild()});
+  document.querySelectorAll('.eKm').forEach(el=>el.onchange=e=>{S.km[e.target.dataset.d]=+e.target.value||0;save();rebuild()});
+  document.querySelectorAll('.eObs').forEach(el=>el.onchange=e=>{S.obs[e.target.dataset.d]=e.target.value;save()});
+  document.querySelectorAll('.eExt').forEach(el=>el.onchange=e=>{S.extra[e.target.dataset.d]=e.target.checked;save();rebuild()});
+  const xm=(d)=>S.xmeta[d]=S.xmeta[d]||{};
+  document.querySelectorAll('.xT').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).tipo=e.target.value;save()});
+  document.querySelectorAll('.xV').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).valor=e.target.value;save();render()});
+  document.querySelectorAll('.xP').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).pago=e.target.value;save();render()});
+  document.querySelectorAll('.xN').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).notas=e.target.value;save()});
+  document.querySelectorAll('.dDel').forEach(el=>el.onclick=e=>{S.dest.splice(+e.target.dataset.i,1);save();render()});
+  // --- contrato / salário ---
+  const poe=(obj,cam,val)=>{const p=cam.split('.');let o=obj;for(let i=0;i<p.length-1;i++){o[p[i]]=o[p[i]]||{};o=o[p[i]]}o[p[p.length-1]]=val};
+  const leForm=()=>{
+    const c=C();
+    document.querySelectorAll('.cEsc').forEach(el=>c.escala[+el.dataset.i]=el.checked?1:0);
+    document.querySelectorAll('[data-c]').forEach(el=>{
+      const k=el.dataset.c;let v;
+      if(el.type==='checkbox')v=el.checked;
+      else if(k==='horasDia'||k==='horasSemana')v=parseHM(el.value);
+      else if(k==='base'||k==='turno'||k==='noiteIni'||k==='noiteFim'||k.endsWith('.regra'))v=el.value;
+      else v=parseFloat(String(el.value).replace(',','.'))||0;
+      poe(c,k,v);
+    });
+    return c;
+  };
+  const cG=$('#cGuardar');if(cG)cG.onclick=()=>{S.contrato=leForm();save();render()};
+  const cR=$('#cRepor');if(cR)cR.onclick=()=>{
+    if(!confirm('Repor os acréscimos e as horas pelos mínimos do Código do Trabalho? Os valores em euros que escreveste mantêm-se.'))return;
+    const c=C();c.horasDia=8*60;c.horasSemana=40*60;c.divisor=173.33;
+    c.acr={extra1:25,extraN:37.5,descanso:50,feriado:50,noturno:25};
+    S.contrato=c;save();render();
+  };
+  // --- horário de trabalho (aba Conta) ---
+  const hG=$('#hGuardar');if(hG)hG.onclick=()=>{
+    const amp=parseHM($('#hAmp').value), ni=$('#hNi').value, nf=$('#hNf').value, ok=/^\d{2}:\d{2}$/;
+    if(!amp||amp>24*60){alert('Amplitude inválida — escreve em h:mm, por exemplo 13:00.');return}
+    if(!ok.test(ni)||!ok.test(nf)||ni===nf){alert('Indica o início e o fim do trabalho noturno (horas diferentes).');return}
+    const c=C();c.ampMax=amp;c.noiteIni=ni;c.noiteFim=nf;c.noiteAviso=$('#hAviso').checked;S.contrato=c;save();nvEstado('Horário guardado.','ok');render();
+  };
+  const hR=$('#hRepor');if(hR)hR.onclick=()=>{const c=C();c.ampMax=13*60;c.noiteIni='22:00';c.noiteFim='07:00';S.contrato=c;save();render()};
+  // --- conta e perfil ---
+  document.querySelectorAll('[data-p]').forEach(el=>el.onchange=e=>{S.perfil[e.target.dataset.p]=e.target.value.trim()});
+  const pG=$('#pGuardar');if(pG)pG.onclick=()=>{document.querySelectorAll('[data-p]').forEach(el=>{S.perfil[el.dataset.p]=el.value.trim()});save();nvEstado('Perfil guardado.','ok');render()};
+  const pC=$('#pDoCartao');if(pC)pC.onclick=()=>{
+    if(!IDENT)return;
+    S.perfil.nome=IDENT.nome||S.perfil.nome;S.perfil.ap=IDENT.ap||S.perfil.ap;S.perfil.cartao=IDENT.card||S.perfil.cartao;
+    save();render();
+  };
+  const cfg=$('#nvSalvarCfg');if(cfg)cfg.onclick=()=>{
+    const u=$('#nvUrl').value.trim().replace(/\/+$/,''),k=$('#nvKey').value.trim();
+    if(!/^https:\/\/.+/.test(u)){alert('O endereço deve começar por https://');return}
+    if(!k){alert('Falta a chave pública do projeto.');return}
+    S.nuvem.url=u;S.nuvem.key=k;save();nvEstado('Ligação guardada. Agora entra ou cria a conta.','ok');render();
+  };
+  const lim=$('#nvLimpaCfg');if(lim)lim.onclick=()=>{
+    if(!confirm('Remover a ligação à nuvem? Os dados deste aparelho não são apagados.'))return;
+    S.nuvem={url:'',key:'',token:'',refresh:'',uid:'',email:'',ultima:0,auto:true,fich:true};save();render();
+  };
+  const bIn=$('#nvIn');if(bIn)bIn.onclick=async()=>{
+    try{nvEstado('A entrar…');await nvEntrar($('#nvEmail').value.trim(),$('#nvPass').value);nvEstado('Entrada feita.','ok');render();await nvSincroniza()}
+    catch(e){nvEstado('Falhou: '+(e.message||e),'bad')}
+  };
+  const bNew=$('#nvNew');if(bNew)bNew.onclick=async()=>{
+    const em=$('#nvEmail').value.trim(),pw=$('#nvPass').value;
+    if(pw.length<8){alert('A palavra-passe deve ter pelo menos 8 caracteres.');return}
+    try{const falta=await nvCriar(em,pw);
+      if(falta)nvEstado('Conta criada. Confirma o email e depois entra.','ok');
+      else{nvEstado('Conta criada.','ok');render();await nvSincroniza()}
+      render();
+    }catch(e){nvEstado('Falhou: '+(e.message||e),'bad')}
+  };
+  const bRec=$('#nvRec');if(bRec)bRec.onclick=async()=>{
+    const em=$('#nvEmail').value.trim();if(!em){alert('Escreve o email primeiro.');return}
+    try{await nvRecuperar(em);nvEstado('Email de recuperação enviado para '+em+'.','ok')}catch(e){nvEstado('Falhou: '+(e.message||e),'bad')}
+  };
+  const bSync=$('#nvSync');if(bSync)bSync.onclick=()=>nvSincroniza();
+  const bOut=$('#nvOut');if(bOut)bOut.onclick=()=>{if(confirm('Terminar sessão neste aparelho?')){nvSair();render()}};
+  const cAuto=$('#nvAuto');if(cAuto)cAuto.onchange=e=>{S.nuvem.auto=e.target.checked;save()};
+  const cFich=$('#nvFich');if(cFich)cFich.onchange=e=>{S.nuvem.fich=e.target.checked;save()};
+  // --- leitor de cartão ---
+  const pedir=async(todos)=>{
+    try{
+      if(!navigator.usb)throw new Error('Este browser não suporta WebUSB.');
+      const dev=await navigator.usb.requestDevice({filters:todos?[{}]:[{classCode:0x0B}]});
+      await rdOpen(dev);render();
+    }catch(e){rlog('Falhou: '+(e.message||e),'bad');render()}
+  };
+  const rdOn=$('#rdOn');if(rdOn)rdOn.onclick=()=>pedir(false);
+  const rdAll=$('#rdAll');if(rdAll)rdAll.onclick=()=>pedir(true);
+  const rdRef=$('#rdRefresh');if(rdRef)rdRef.onclick=()=>render();
+  document.querySelectorAll('.rdDev').forEach(el=>el.onclick=async e=>{
+    const id=+e.currentTarget.dataset.id;
+    try{await andAbrir(id);render()}catch(x){rlog('Falhou: '+(x.message||x),'bad');render()}
+  });
+  const rdLer=$('#rdLer');if(rdLer)rdLer.onclick=()=>rdLerCartao();
+  const rdOff=$('#rdOff');if(rdOff)rdOff.onclick=async()=>{await rdClose();render()};
+  const rdSave=$('#rdSave');if(rdSave)rdSave.onclick=()=>{
+    const d=dISO(new Date()).replace(/-/g,'');
+    download('C_'+d+'_'+(RD.nome||'cartao')+'.ddd',new Blob([RD.ddd],{type:'application/octet-stream'}));
+  };
+  // --- inserção manual (discos) ---
+  document.querySelectorAll('[data-m]').forEach(el=>el.onchange=e=>{
+    const f=e.target.dataset.m;MDRAFT[f]=e.target.value;
+    if(f==='modo'||f==='d')render();
+  });
+  document.querySelectorAll('.mBA,.mBI,.mBF').forEach(el=>el.onchange=e=>{
+    const i=+e.target.dataset.i,c=e.target.className;
+    if(c.includes('mBA'))MDRAFT.blocos[i].a=+e.target.value;
+    else if(c.includes('mBI'))MDRAFT.blocos[i].ini=e.target.value;
+    else MDRAFT.blocos[i].fim=e.target.value;
+  });
+  document.querySelectorAll('.mBDel').forEach(el=>el.onclick=e=>{MDRAFT.blocos.splice(+e.currentTarget.dataset.i,1);render()});
+  const mAddB=$('#mAddB');if(mAddB)mAddB.onclick=()=>{
+    const last=MDRAFT.blocos[MDRAFT.blocos.length-1];
+    MDRAFT.blocos.push({a:3,ini:last?last.fim:MDRAFT.ini,fim:''});render()};
+  const mNew=$('#mNew');if(mNew)mNew.onclick=()=>{MDRAFT=novoDraft();render()};
+  const mSave=$('#mSave');if(mSave)mSave.onclick=()=>{
+    const D=MDRAFT;
+    if(!D.d||!D.ini||!D.fim){alert('Indica a data, a hora de início e a hora de fim do turno.');return}
+    const jo=manJorn(D);
+    if(D.modo==='blk'){
+      if(!(D.blocos||[]).filter(b=>b.ini&&b.fim).length){alert('Adiciona pelo menos um bloco com hora de início e de fim.');return}
+    }else{
+      const soma=parseHM(D.cond)+parseHM(D.ot)+parseHM(D.disp);
+      if(soma>jo){alert('Condução + outros trabalhos + disponibilidade ('+hm(soma)+') excede a jornada de '+hm(jo)+'.');return}
+    }
+    S.man[D.d]={src:D.src,ini:D.ini,fim:D.fim,modo:D.modo,cond:D.cond,ot:D.ot,disp:D.disp,blocos:(D.blocos||[]).filter(b=>b.ini&&b.fim)};
+    if(String(D.km).trim()!=='')S.km[D.d]=+D.km||0;
+    if(String(D.obs).trim()!=='')S.obs[D.d]=D.obs;
+    MDRAFT=novoDraft();save();rebuild();
+  };
+  document.querySelectorAll('.mEd').forEach(el=>el.onclick=e=>{
+    const d=e.currentTarget.dataset.d,m=S.man[d];
+    MDRAFT={d,src:m.src||'Disco',ini:m.ini||'',fim:m.fim||'',modo:m.modo||'tot',cond:m.cond||'',ot:m.ot||'',disp:m.disp||'',
+      km:S.km[d]??'',obs:S.obs[d]||'',blocos:(m.blocos||[]).map(b=>({...b}))};
+    render();scrollTo(0,0);
+  });
+  document.querySelectorAll('.mDel').forEach(el=>el.onclick=e=>{
+    const d=e.currentTarget.dataset.d;
+    if(confirm('Apagar o dia '+dPT(d)+' inserido à mão?')){delete S.man[d];save();rebuild()}
+  });
+  const bl=$('#bisLim');if(bl)bl.onchange=e=>{S.bisLim=+e.target.value||45*60;save();rebuild()};
+  const dAdd=$('#dAdd');if(dAdd)dAdd.onclick=()=>{const n=$('#dNome').value.trim(),k=$('#dKw').value.trim().toLowerCase();if(n&&k){S.dest.push([n,k]);save();render()}};
+  const cAdd=$('#cAdd');if(cAdd)cAdd.onclick=()=>{const d=$('#cD').value,t=$('#cT').value.trim();if(d&&t){(S.ctrlHist=S.ctrlHist||[]).push({d,txt:t});save();render()}};
+  const q=id=>$(id);
+  if(q('#exCsv'))q('#exCsv').onclick=()=>{const csv=dadosMatrix().map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\r\n');download('DADOS_tacografo.csv',new Blob(['\ufeff'+csv],{type:'text/csv'}))};
+  if(q('#exJson'))q('#exJson').onclick=()=>download('backup_notas_tacografo.json',new Blob([JSON.stringify(S,null,1)],{type:'application/json'}));
+  if(q('#imJson'))q('#imJson').onclick=()=>q('#jsonIn').click();
+  if(q('#jsonIn'))q('#jsonIn').onchange=async e=>{try{Object.assign(S,JSON.parse(await e.target.files[0].text()));save();rebuild()}catch(x){alert('Ficheiro JSON inválido.')}};
+  if(q('#exWipe'))q('#exWipe').onclick=()=>{if(confirm('Apagar todas as notas manuais?')){localStorage.removeItem(LS);location.reload()}};
+  if(q('#exPdf'))q('#exPdf').onclick=()=>{TAB='fisc';render();setTimeout(()=>window.print(),150)};
+  if(q('#exXlsx'))q('#exXlsx').onclick=async()=>{
+    try{
+      if(!window.XLSX)await new Promise((ok,ko)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=ok;s.onerror=ko;document.head.appendChild(s)});
+      const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dadosMatrix()),'DADOS');
+      const wkm=[['Semana (início)','Semana (fim)','Dias','Trabalho','Jornada','Média 4m','Margem 60h','Estado','Condução','Bissem. #','Acum. bissem.','Cond. bissem.'],
+        ...WEEKS.map(w=>[dPT(w.k),dPT(w.kEnd),w.dias,hm(w.trab),hm(w.jorn),hm(w.m4),hm(w.margem),w.estado,hm(w.cond),(w.biIdx??0)+1,hm(w.bis),hm(w.bisC)])];
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(wkm),'LEI 84-2026');
+      const bis=[['#','Início','Fim','Dias trabalhados','Dias corridos','Condução','Margem 90h','Trabalho','Jornada','Fechado por (descanso)','Data do descanso','Estado'],
+        ...BIPER.map(p=>[p.i+1,dPT(p.iniIso),dPT(p.fimIso),p.dias,p.span,hm(p.cond),hm(p.margem),hm(p.trab),hm(p.jorn),p.fecho?hm(p.fecho.dur):'EM CURSO',p.fecho?dPT(p.fecho.iso):'',p.cond>90*60?'> 90h':p.cond>=0.8*90*60?'≥ 80%':'OK'])];
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(bis),'BISSEMANAIS');
+      const dsc=[['Data','Fim do turno','Início seguinte','Jornada (amplitude)','Fim das 24h','Descanso dentro das 24h','Descanso total','Status','Red.','Regra máx. 3','Falta (45h)','Compensação'],
+        ...RESTS.map(r=>[dPT(r.iso),clk(L(r.fim)),clk(L(r.ini)),hm(r.amp),clk(L(r.jan)),hm(r.dentro),hm(r.dur),r.status+(r.frac?' (FRACIONADO)':''),r.red,r.max3,r.falta?hm(r.falta):'',r.comp||''])];
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dsc),'DESCANSOS');
+      const sd=[['Data','Dia','Tipo','Trabalho','Normais','Extra 1.ª','Extra segs.','Descanso','Feriado','Noturnas','Fixos (€)','Extras (€)','Valor (€)'],
+        ...salarioDias().map(d=>[dPT(d.iso),d.dia,d.tipo,hm(d.base),hm(d.normais),hm(d.e1),hm(d.eN),hm(d.desc),hm(d.fer),hm(d.not),
+          Math.round(d.fixos*100)/100,Math.round(d.extraMan*100)/100,Math.round(d.total*100)/100])];
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sd),'SALARIO');
+      const sm=[['Mês','Dias','Fora de escala','Trabalho','Normais','Extra 1.ª','Extra segs.','Descanso','Feriado','Noturnas','Fixos (€)','Extras (€)','A receber (€)'],
+        ...salarioMeses().map(m=>[dPT(m.k+'-01').slice(3),m.dias,m.diasExtra,hm(m.base),hm(m.normais),hm(m.e1),hm(m.eN),hm(m.desc),hm(m.fer),hm(m.not),
+          Math.round(m.fixos*100)/100,Math.round(m.extraMan*100)/100,Math.round(m.valor*100)/100])];
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sm),'SALARIO MES');
+      XLSX.writeFile(wb,'Tacografo_export.xlsx');
+    }catch(e){alert('Sem ligação para carregar a biblioteca Excel. Usa o CSV, que funciona offline.')}
+  };
+}
+
+/* ============ FICHEIROS ============ */
+$('#btnLoad').onclick=()=>$('#fileIn').click();
+$('#fileIn').onchange=async e=>{
+  for(const f of e.target.files){
+    try{RAW.push(parseDDD(await f.arrayBuffer()))}
+    catch(x){alert('Não consegui ler '+f.name+' — confirma que é uma descarga de cartão .esm/.ddd.')}
+  }
+  try{const cache=await caches.open('tacho-data');}catch(x){}
+  // persistir ficheiros em IndexedDB simples (localStorage não chega): base64 no LS se couber
+  render&&rebuild();
+};
+$('#tzSel').onchange=e=>{S.tz=e.target.value;save();rebuild()};
+nav();render();
+/* PWA */
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+/* Guardar/repor ficheiros do cartão entre sessões via IndexedDB */
+const IDB={
+  open:()=>new Promise((ok,ko)=>{const r=indexedDB.open('tacho',1);r.onupgradeneeded=()=>r.result.createObjectStore('files');r.onsuccess=()=>ok(r.result);r.onerror=ko}),
+  set:async(k,v)=>{const db=await IDB.open();return new Promise((ok,ko)=>{const t=db.transaction('files','readwrite');t.objectStore('files').put(v,k);t.oncomplete=ok;t.onerror=ko})},
+  get:async(k)=>{const db=await IDB.open();return new Promise((ok,ko)=>{const t=db.transaction('files');const rq=t.objectStore('files').get(k);rq.onsuccess=()=>ok(rq.result);rq.onerror=ko})},
+  chaves:async()=>{const db=await IDB.open();return new Promise((ok,ko)=>{const t=db.transaction('files');const rq=t.objectStore('files').getAllKeys();rq.onsuccess=()=>ok(rq.result.map(String));rq.onerror=ko})},
+  all:async()=>{const db=await IDB.open();return new Promise((ok,ko)=>{const t=db.transaction('files');const rq=t.objectStore('files').getAll();rq.onsuccess=()=>ok(rq.result);rq.onerror=ko})}
+};
+(async()=>{try{
+  const stored=await IDB.all();
+  if(stored&&stored.length){for(const b of stored)RAW.push(parseDDD(b));rebuild()}
+}catch(e){}
+  if(nvLig()&&S.nuvem.auto&&navigator.onLine){try{await nvSincroniza()}catch(e){}}
+})();
+const _oldChange=$('#fileIn').onchange;
+$('#fileIn').onchange=async e=>{
+  let n=0;
+  for(const f of e.target.files){
+    try{const ab=await f.arrayBuffer();RAW.push(parseDDD(ab));await IDB.set(f.name+'_'+f.size,ab);n++}
+    catch(x){alert('Não consegui ler '+f.name+'.')}
+  }
+  if(n)rebuild();
+  e.target.value='';
+};
+</script>
+</body>
+</html>
