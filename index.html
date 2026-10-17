@@ -115,11 +115,24 @@ td .chk{width:16px;height:16px}
 .rj tr.vazia td{color:#999}
 .rj tr.tot td{font-weight:700;color:#1F4E79}
 .rj .rj-nota{font-size:10.5px;color:#666;margin-top:10px}
+.rj td.txt{text-align:left;white-space:normal;min-width:180px}
+.rj table.rj-dados td:nth-child(12){min-width:320px}
+.rj tr.fds td:nth-child(-n+2){background:#FCE4D6}
+.rj tr.ext td{background:#FFF2CC}
+.rj td.vbad,.rj .rj-st.bad{color:#9C0006;background:#FFC7CE}
+.rj td.vwarn,.rj .rj-st.warn{color:#9C6500;background:#FFEB9C}
+.rj .rj-st.ok{color:#006100;background:#C6EFCE}
+.rj .rj-st{display:inline-block;padding:1px 6px;font-weight:600}
+.rj-abas .btn{padding:6px 10px;font-size:13px}
+.rj-quebra{margin-top:16px}
 @media print{
   .rj{padding:0;border-radius:0}
   .rj .rj-kpis{grid-template-columns:repeat(6,1fr)}
   .rj table{font-size:9.5px}.rj th{font-size:9px;padding:4px}.rj td{padding:3px 4px}
-  .rj th,.rj .rj-k{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rj th,.rj .rj-k,.rj td,.rj .rj-st{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rj-quebra{break-before:page;margin-top:0}
+  .rj td.txt{min-width:0}.rj table.rj-dados td:nth-child(12){min-width:0}
+  .rj td{white-space:nowrap}.rj td.txt{white-space:normal}.rj th{white-space:normal}
 }
 @media(min-width:900px){
   nav{position:sticky;top:57px;bottom:auto;border-top:none;border-bottom:1px solid var(--line)}
@@ -160,7 +173,7 @@ td .chk{width:16px;height:16px}
 <main id="main"></main>
 
 <footer>
-  <span class="mono" style="display:block;margin-bottom:4px;color:var(--faint)">v2.5 — leitor de cartão lê o histórico completo (corrige buffer circular) com barra de progresso; restaurar backup junta em vez de substituir · v2.4 — relatório de jornada no padrão da folha JORNADA TOTAL (ecrã, PDF e Excel formatado) · v2.3 — aba Conta: amplitude de trabalho e janela noturna; extensões a 10h contam dias com condução &gt; 9h; escala, horas extra e valores a receber; perfil e sincronização; descansos pela lógica das 24h; leitor USB nativo na app Android; bissemanal reinicia após descanso ≥ 45h; inserção manual (discos)</span>
+  <span class="mono" style="display:block;margin-bottom:4px;color:var(--faint)">v2.6 — relatório com as folhas DADOS, JORNADA TOTAL, DL 84 2026, DESCANSOS e EXTRAS (ecrã, PDF e Excel) · v2.5 — leitor de cartão lê o histórico completo (corrige buffer circular) com barra de progresso; restaurar backup junta em vez de substituir · v2.4 — relatório de jornada no padrão da folha JORNADA TOTAL (ecrã, PDF e Excel formatado) · v2.3 — aba Conta: amplitude de trabalho e janela noturna; extensões a 10h contam dias com condução &gt; 9h; escala, horas extra e valores a receber; perfil e sincronização; descansos pela lógica das 24h; leitor USB nativo na app Android; bissemanal reinicia após descanso ≥ 45h; inserção manual (discos)</span>
   <span>Os dados nunca saem deste dispositivo. Esta aplicação é uma ferramenta pessoal de apoio: não substitui os registos oficiais do tacógrafo nem aconselhamento jurídico. Reg. (CE) 561/2006 · DL 84/2026.</span>
 </footer>
 <script>
@@ -1743,8 +1756,9 @@ function fisc(){
   <button class="btn amber" onclick="window.print()">🖨 Dossier PDF</button></div>`;
 }
 
-/* ---- Relatório de jornada (padrão da folha "JORNADA TOTAL" do Excel) ---- */
-let RJ_MES='',RJ_VOLTA='exportar';
+/* ---- Relatório de jornada: folhas DADOS, JORNADA TOTAL, DL 84 2026, DESCANSOS e EXTRAS (padrão do Excel) ---- */
+let RJ_MES='',RJ_VOLTA='exportar',RJ_ABA='jornada';
+const RJ_ABAS=[['dados','DADOS'],['jornada','JORNADA TOTAL'],['dl84','DL 84 2026'],['desc','DESCANSOS'],['extras','EXTRAS']];
 function relJornadaDados(mes){
   const rows=ROWS.filter(r=>!mes||r.iso.slice(0,7)===mes);
   if(!rows.length)return null;
@@ -1760,7 +1774,14 @@ function relJornadaDados(mes){
   const T={dias:0,cond:0,ot:0,disp:0,esp:0,pausa:0,jorn:0};
   for(const s of sem)for(const f in T)T[f]+=s[f];
   T.mediaDia=T.dias?T.jorn/T.dias:0;T.mediaSem=sem.length?T.jorn/sem.length:0;
-  return {sem,T,ini:rows[0].iso,fim,mes};
+  const ini=rows[0].iso;
+  // o mesmo período para as outras folhas
+  const fimP=mes?(()=>{const e=new Date(mes+'-01T00:00:00Z');e.setUTCMonth(e.getUTCMonth()+1);e.setUTCDate(0);return dISO(e)})():fim;
+  const iniP=mes?mes+'-01':ini;
+  const semDL=WEEKS.filter(w=>w.kEnd>=iniP&&w.k<=fimP);
+  const desc=RESTS.map((r,i)=>({r,row:ROWS[i]})).filter(x=>x.r.iso>=iniP&&x.r.iso<=fimP);
+  const ext=extraRows().filter(x=>x.iso>=iniP&&x.iso<=fimP);
+  return {sem,T,ini,fim,mes,rows,semDL,desc,ext};
 }
 function rjIdent(){
   const P=S.perfil||{};
@@ -1769,97 +1790,212 @@ function rjIdent(){
   return {nome:nome.trim(),cartao,empresa:P.empresa||'',matricula:P.matricula||''};
 }
 function rjPeriodo(R){return R.mes?'Mês de '+dPT(R.mes+'-01').slice(3):dPT(R.ini)+' a '+dPT(R.fim)}
+function rjIdLinha(R){const I=rjIdent();return [I.nome&&'Condutor: '+I.nome,I.cartao&&'Cartão: '+I.cartao,I.empresa,I.matricula&&'Matrícula: '+I.matricula,'Período: '+rjPeriodo(R)].filter(Boolean)}
 const RJ_SUB='Soma toda a jornada (Início ao Fim) e os seus componentes: Condução + Outros Trabalhos + Disponibilidade + Espera Doc. + Pausa. Semana = segunda a domingo.';
 const RJ_NOTA='Nota: a coluna Acumulado soma a jornada total desde a primeira semana do relatório. Fonte de dados: registos do cartão de condutor e dias inseridos à mão (Condução, Outros Trabalhos, Disponibilidade, Espera Doc., Pausa e Jornada).';
+const DL_SUB='Limites do art. 21.º do DL 84/2026: máx. 60h de trabalho por semana e média de 48h num período de 4 meses (≈17 semanas). Tempo de trabalho = Condução + Outros Trabalhos + Disponibilidade. Semana = segunda a domingo. BISSEMANAL: a contagem reinicia sempre que existe um descanso igual ou superior ao limiar definido na app (por defeito 45h) — esse descanso fecha o período anterior e o novo começa no turno seguinte. As colunas bissemanais mostram o acumulado do período em curso até ao fim dessa semana. Limite de condução na bissemanal: 90h (Reg. 561/2006, art. 6.º/3).';
+const DL_NOTA='Nota: os limites de 60h e média de 48h (4 meses) vêm do artigo 21.º do DL 84/2026. Colunas bissemanais: condução acumulada no período bissemanal em curso — limite de 90h (Reg. 561/2006); a partir de 112h30 aplica-se o agravamento de 20% das coimas (art. 39.º, n.º 2 do DL 84/2026). Fonte de dados: folha DADOS.';
+const DS_SUB='Descanso calculado pela LÓGICA DAS 24 HORAS (Reg. 561/2006, art. 8.º/2): o período de 24h começa no início do turno e o descanso diário tem de estar COMPLETO dentro dessas 24 horas — jornada até 13h: DIÁRIO REGULAR · de 13h a 15h: DIÁRIO REDUZIDO (máx. 3 entre dois descansos semanais, art. 8.º/4) · acima de 15h: INFRAÇÃO. A coluna "Dentro das 24h" é a que decide. Fracionado (art. 4.º, al. g): 3h seguidas de pausa no turno + 9h a seguir valem como regular. Semanais: ≥24h REDUZIDO · ≥45h REGULAR; as horas em falta até 45h compensam-se até ao fim da 3.ª semana seguinte (art. 8.º/6).';
+const EX_SUB='Dias marcados como Extra nos Registos e dias trabalhados a sábado, domingo ou feriado. Valores e estado de pagamento lançados na aba Extras da app.';
+/* nota da folha DESCANSOS (mesma lógica da coluna Nota do Excel) */
+function notaDesc(r){
+  if(r.status==='INSUFICIENTE')return r.amp>15*60?'JORNADA '+hm(r.amp)+' — nem 9h cabem nas 24h':'DESCANSO '+hm(r.dur)+' — abaixo das 9h';
+  if(r.weekly&&r.dentro<9*60)return 'JORNADA '+hm(r.amp)+' — o semanal começou fora das 24h';
+  if(r.frac)return 'FRACIONADO — pausa de '+hm(r.pausaMax)+' no turno + '+hm(r.dentro)+' a seguir';
+  if(r.fracDuvida)return 'PAUSA DE '+hm(r.pausaMax)+' — se foi seguida, vale como fracionado (regular)';
+  if(r.status==='DIÁRIO REDUZIDO')return r.amp>13*60?'JORNADA '+hm(r.amp)+' — as 11h já não cabiam nas 24h':'DESCANSO '+hm(r.dentro)+' — não chegou às 11h';
+  return '—';
+}
+const estSem=t=>t>60*60?'EXCESSO':t>55*60?'ALERTA':'OK';
+const estBis=c=>c>112.5*60?'AGRAV. +20%':c>90*60?'EXCESSO':c>=0.8*90*60?'ALERTA':'OK';
+const corEst=v=>/EXCESSO|AGRAV|INSUFIC|COMPENSAR|EXCEDIDO|MÉDIA >/.test(v)?'bad':/ALERTA|REDUZIDO/.test(v)?'warn':/^OK$|REGULAR|COMPENSADO/.test(v)?'ok':'';
+const dtl=abs=>dPT(dISO(new Date(L(abs)*60000)))+' '+clk(L(abs));
+const eurN=v=>(Math.round(v*100)/100).toFixed(2).replace('.',',');
+
+/* ---- conteúdo de cada folha: linhas comuns ao ecrã/PDF e ao Excel ---- */
+function rjFolhas(R){
+  const F={};
+  // DADOS
+  F.dados={titulo:null,
+    cab:['Data','Dia','Início','Fim','Total','Condução','Outros Trabalhos','Disponibilidade','Espera Doc.','Pausa','KM','Observações','Mês','Extra','Tipo Registo'],
+    tipos:['d','s','dt','dt','h','h','h','h','h','h','n','s','m','s','s'],
+    linhas:R.rows.map(r=>({fds:r.dia==='SÁB'||r.dia==='DOM',extra:r.extra,
+      v:[r.iso,r.dia,r.st,r.en,r.jornada,r.cond,r.ot,r.disp,r.esp,r.pausa,r.km||0,r.obs,r.iso.slice(0,7),r.extra?'SIM':'',r.man?(S.man[r.iso]&&S.man[r.iso].src||'Disco'):'Digital']}))};
+  // JORNADA TOTAL
+  const T=R.T;
+  F.jornada={titulo:'JORNADA TOTAL — CONTROLO DE TODO O PERÍODO DE TRABALHO',sub:RJ_SUB,nota:RJ_NOTA,
+    kpis:[['Jornada total acumulada',T.jorn,'h'],['Condução',T.cond,'h'],['Outros trabalhos',T.ot,'h'],['Disponib. + Espera',T.disp+T.esp,'h'],['Média jornada/dia',T.mediaDia,'h'],['Média jornada/semana',T.mediaSem,'h']],
+    seccao:'TABELA SEMANAL — JORNADA COMPLETA E COMPONENTES',
+    cab:['Semana (início)','Semana (fim)','Dias','Condução (h)','Outros trab. (h)','Disponib. (h)','Espera doc. (h)','Pausa (h)','Jornada total (h)','Média jorn./dia','Acumulado (h)'],
+    tipos:['d','d','n','h','h','h','h','h','hb','h','h'],
+    linhas:R.sem.map(s=>({vazia:!s.dias,v:[s.k,s.kEnd,s.dias,s.cond,s.ot,s.disp,s.esp,s.pausa,s.jorn,s.media,s.acum]})),
+    total:['TOTAL','',T.dias,T.cond,T.ot,T.disp,T.esp,T.pausa,T.jorn,T.mediaDia,T.jorn]};
+  // DL 84 2026
+  const W=R.semDL, uw=W[W.length-1];
+  const bisAt=uw?BIPER[uw.biIdx]:null;
+  F.dl84={titulo:'CONTROLO DL 84/2026 — TEMPO DE TRABALHO SEMANAL',sub:DL_SUB,nota:DL_NOTA,
+    kpis:uw?[['Última semana '+dPT(uw.k).slice(0,5)+'–'+dPT(uw.kEnd).slice(0,5)+' (Cond+OT+Disp)',uw.trab,'h'],['Margem até 60h (última semana)',Math.max(0,60*60-uw.trab),'h'],
+      ['Acum. bissemanal (Cond+OT+Disp)',uw.bis,'h'],['Margem até 90h (condução na bissemanal)',Math.max(0,90*60-uw.bisC),'h'],
+      ['Semanas em alerta (55h–60h)',W.filter(w=>w.trab>55*60&&w.trab<=60*60).length,'n'],['Média 4 meses (última semana)',uw.m4,'h'],
+      ['Semanas acima de 60h',W.filter(w=>w.trab>60*60).length,'n'],['Pior semana (h trabalho)',Math.max(...W.map(w=>w.trab)),'h'],
+      ['Condução na bissemanal atual (limite 90h)',bisAt?bisAt.cond:uw.bisC,'h']]:[],
+    seccao:'TABELA SEMANAL — MÉDIA E LIMITES (DL 84/2026, art. 21.º)',
+    cab:['Semana (início)','Semana (fim)','Dias','Trabalho (h)','Jornada total (h)','Média 4 meses (h)','Margem p/ 60h','Estado semana','Estado média 4 meses','Limite 60h','Ref. 48h','Condução (h)','Acum. bissemanal (Cond+OT+Disp)','Condução acum. na bissemanal','Margem p/ 90h (condução)','Estado bissemanal (condução)','N.º da bissemanal'],
+    tipos:['d','d','n','hb','h','h','h','e','e','h','h','h','h','h','h','e','n'],
+    linhas:W.map(w=>({v:[w.k,w.kEnd,w.dias,w.trab,w.jorn,w.m4,Math.max(0,60*60-w.trab),estSem(w.trab),w.m4>48*60?'MÉDIA > 48h':'OK',60*60,48*60,w.cond,w.bis,w.bisC,Math.max(0,90*60-w.bisC),estBis(w.bisC),(w.biIdx??0)+1]}))};
+  // DESCANSOS
+  const D=R.desc, ult=D.length?D[D.length-1].r:null;
+  F.desc={titulo:'DESCANSOS — INTERVALO ENTRE O FIM E O INÍCIO DO TURNO SEGUINTE',sub:DS_SUB,
+    kpis:ult?[['Último descanso (h)',ult.dur,'h'],['Dentro das 24h (h)',ult.dentro,'h'],['Descanso mínimo (h)',Math.min(...D.map(x=>x.r.dur)),'h'],
+      ['Red. desde último semanal',ult.red,'n'],['Jornadas acima de 13h',D.filter(x=>x.r.amp>13*60).length,'n'],['Descansos fora das 24h',D.filter(x=>x.r.dentro<9*60).length,'n']]:[],
+    seccao:'TABELA DIÁRIA — DESCANSO ENTRE TURNOS',
+    cab:['Data','Fim do turno','Início seguinte','Jornada (amplitude)','Fim das 24h','Descanso dentro das 24h','Descanso total (h)','Status','Nota','Red. desde desc. semanal','Regra máx. 3','Horas em falta (45h)','Compensação (art. 8.º/6)','Fecha bissemanal','N.º da bissemanal','Condução acum. bissemanal','Trabalho acum. bissemanal'],
+    tipos:['d','dt','dt','hA','dt','hD','h','e','s','n','e','h','e','n','n','h','h'],
+    linhas:D.map(({r,row})=>({v:[r.iso,r.fim,r.ini,r.amp,r.jan,r.dentro,r.dur,r.status+(r.frac?' (FRACIONADO)':''),notaDesc(r),r.weekly?0:r.red,r.max3==='OK'?'OK':'EXCEDIDO (máx. 3)',
+      r.weekly?(r.falta||0):null,r.comp||(r.weekly?'—':''),r.fechaBis?1:0,row?(row.bi??0)+1:'',row?row.biC:null,row?row.biT:null]}))};
+  // EXTRAS (folha nova, no mesmo estilo)
+  const X=R.ext, tot=X.reduce((s,x)=>s+(parseFloat(String(x.valor).replace(',','.'))||0),0), por=X.filter(x=>x.pago!=='Sim').reduce((s,x)=>s+(parseFloat(String(x.valor).replace(',','.'))||0),0);
+  F.extras={titulo:'EXTRAS — DIAS EXTRA, FINS DE SEMANA E FERIADOS',sub:EX_SUB,
+    kpis:[['Total registado (€)',tot,'eur'],['Por receber (€)',por,'eur'],['Recebido (€)',tot-por,'eur'],['Dias extra',X.length,'n'],['Horas em dias extra',X.reduce((s,x)=>s+x.h,0),'h']],
+    seccao:'TABELA DE EXTRAS',
+    cab:['Data','Dia','Tipo','Observações','Horas','KM','Valor (€)','Pago?','Notas'],
+    tipos:['d','s','s','s','h','n','eur','e','s'],
+    linhas:X.map(x=>({v:[x.iso,x.dia,x.tipo,x.obs,x.h,x.km||0,parseFloat(String(x.valor).replace(',','.'))||0,x.pago==='Sim'?'Sim':'Não',x.notas]})),
+    total:['TOTAL','','','',X.reduce((s,x)=>s+x.h,0),X.reduce((s,x)=>s+(x.km||0),0),tot,'','']};
+  return F;
+}
+
+/* ---- ecrã / PDF ---- */
+function rjCel(v,t){
+  if(v==null||v==='')return '';
+  if(t==='d')return dPT(v);
+  if(t==='dt')return dtl(v);
+  if(t==='m')return dPT(v+'-01').slice(3);
+  if(t==='h'||t==='hb'||t==='hA'||t==='hD')return hm(v);
+  if(t==='eur')return eurN(v)+' €';
+  if(t==='e')return `<span class="rj-st ${corEst(String(v))}">${esc(v)}</span>`;
+  return esc(v);
+}
+function rjFolhaHTML(id,F,R){
+  const tab=(f,cls)=>`<div class="rj-tw"><table class="${cls||''}"><thead><tr>${f.cab.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${f.linhas.map(l=>`<tr class="${l.vazia?'vazia':''}${l.fds?' fds':''}${l.extra?' ext':''}">${l.v.map((v,i)=>{const t=f.tipos[i];
+      const red=(t==='hA'&&v>15*60)||(t==='hD'&&v<9*60), amb=t==='hA'&&v>13*60&&v<=15*60;
+      return `<td class="${t==='s'&&i>2?'txt':''}${red?' vbad':amb?' vwarn':''}">${t==='hb'?'<b>'+rjCel(v,t)+'</b>':rjCel(v,t)}</td>`}).join('')}</tr>`).join('')||`<tr><td colspan="${f.cab.length}">Sem registos no período.</td></tr>`}</tbody>
+    ${f.total?`<tfoot><tr class="tot">${f.total.map((v,i)=>`<td>${typeof v==='number'?rjCel(v,f.tipos[i]==='hb'?'h':f.tipos[i]):esc(v)}</td>`).join('')}</tr></tfoot>`:''}</table></div>`;
+  if(id==='dados')return `<div class="rj"><h3>DADOS — REGISTO DIÁRIO</h3><div class="rj-id">${rjIdLinha(R).map(esc).join(' · ')}</div>${tab(F,'rj-dados')}
+    <div class="rj-nota">Total = jornada do início ao fim do turno. Fins de semana com a data a cor de laranja; dias Extra a amarelo. Tipo Registo: Digital (cartão) ou a origem dos dias inseridos à mão.</div></div>`;
+  const k=(l,v,t)=>`<div class="rj-k"><span>${l}</span><b>${t==='h'?hm(v):t==='eur'?eurN(v)+' €':v}</b></div>`;
+  return `<div class="rj"><h3>${F.titulo}</h3><div class="rj-sub">${F.sub}</div><div class="rj-id">${rjIdLinha(R).map(esc).join(' · ')}</div>
+    ${F.kpis&&F.kpis.length?`<div class="rj-kpis">${F.kpis.map(x=>k(...x)).join('')}</div>`:''}
+    <h4>${F.seccao}</h4>${tab(F)}
+    ${F.nota?`<div class="rj-nota">${F.nota}</div>`:''}
+    <div class="rj-nota">Gerado em ${new Date().toLocaleString('pt-PT')} · Controle de Tacógrafo</div></div>`;
+}
 function relJornada(){
   const ms=[...new Set(ROWS.map(r=>r.iso.slice(0,7)))];
   const R=relJornadaDados(RJ_MES);
   const ctl=`<div class="row noprint"><button class="btn" id="rjVolta">← Voltar</button>
     <select id="rjMes" aria-label="Período"><option value="">Todo o período</option>${ms.map(m=>`<option value="${m}" ${RJ_MES===m?'selected':''}>${dPT(m+'-01').slice(3)}</option>`).join('')}</select>
-    <button class="btn amber" id="rjPrint">🖨 Imprimir / PDF</button><button class="btn" id="rjXlsx">⇩ Excel</button></div>`;
+    <button class="btn amber" id="rjPrint">🖨 Imprimir / PDF</button><button class="btn" id="rjXlsx">⇩ Excel (5 folhas)</button></div>
+    <div class="row noprint rj-abas">${RJ_ABAS.map(([id,n])=>`<button class="btn ${RJ_ABA===id?'amber':''}" data-rja="${id}">${n}</button>`).join('')}<button class="btn ${RJ_ABA==='todas'?'amber':''}" data-rja="todas">Todas</button></div>`;
   if(!R)return ctl+'<div class="empty">Sem dias de trabalho no período escolhido.</div>';
-  const I=rjIdent(),T=R.T;
-  const idl=[I.nome&&'Condutor: '+esc(I.nome),I.cartao&&'Cartão: '+esc(I.cartao),I.empresa&&esc(I.empresa),I.matricula&&'Matrícula: '+esc(I.matricula),'Período: '+rjPeriodo(R)].filter(Boolean).join(' · ');
-  const k=(l,v)=>`<div class="rj-k"><span>${l}</span><b>${v}</b></div>`;
-  const z=m=>m?hm(m):'0:00';
-  const linhas=R.sem.map(s=>`<tr class="${s.dias?'':'vazia'}"><td>${dPT(s.k)}</td><td>${dPT(s.kEnd)}</td><td>${s.dias}</td>
-    <td>${z(s.cond)}</td><td>${z(s.ot)}</td><td>${z(s.disp)}</td><td>${z(s.esp)}</td><td>${z(s.pausa)}</td>
-    <td><b>${z(s.jorn)}</b></td><td>${s.media==null?'':hm(s.media)}</td><td>${z(s.acum)}</td></tr>`).join('');
-  return ctl+`<div class="rj">
-    <h3>JORNADA TOTAL — CONTROLO DE TODO O PERÍODO DE TRABALHO</h3>
-    <div class="rj-sub">${RJ_SUB}</div>
-    <div class="rj-id">${idl}</div>
-    <div class="rj-kpis">${k('Jornada total acumulada',hm(T.jorn))}${k('Condução',hm(T.cond))}${k('Outros trabalhos',hm(T.ot))}
-      ${k('Disponib. + Espera',hm(T.disp+T.esp))}${k('Média jornada/dia',hm(T.mediaDia))}${k('Média jornada/semana',hm(T.mediaSem))}</div>
-    <h4>TABELA SEMANAL — JORNADA COMPLETA E COMPONENTES</h4>
-    <div class="rj-tw"><table>
-      <thead><tr><th>Semana (início)</th><th>Semana (fim)</th><th>Dias</th><th>Condução (h)</th><th>Outros trab. (h)</th><th>Disponib. (h)</th><th>Espera doc. (h)</th><th>Pausa (h)</th><th>Jornada total (h)</th><th>Média jorn./dia</th><th>Acumulado (h)</th></tr></thead>
-      <tbody>${linhas}</tbody>
-      <tfoot><tr class="tot"><td>TOTAL</td><td></td><td>${T.dias}</td><td>${hm(T.cond)}</td><td>${hm(T.ot)}</td><td>${hm(T.disp)}</td><td>${hm(T.esp)}</td><td>${hm(T.pausa)}</td><td>${hm(T.jorn)}</td><td>${hm(T.mediaDia)}</td><td>${hm(T.jorn)}</td></tr></tfoot>
-    </table></div>
-    <div class="rj-nota">${RJ_NOTA}</div>
-    <div class="rj-nota">Gerado em ${new Date().toLocaleString('pt-PT')} · Controle de Tacógrafo</div>
-  </div>`;
+  const F=rjFolhas(R);
+  const larga=RJ_ABA!=='jornada'&&RJ_ABA!=='extras';
+  const corpo=RJ_ABA==='todas'?RJ_ABAS.map(([id],i)=>`<div class="${i?'rj-quebra':''}">${rjFolhaHTML(id,F[id],R)}</div>`).join('')
+    :rjFolhaHTML(RJ_ABA,F[RJ_ABA],R);
+  return ctl+(larga||RJ_ABA==='todas'?'<style>@page{size:A4 landscape;margin:8mm}</style>':'')+corpo;
 }
+
 /* ---- Excel com formatação (xlsx-js-style: mesma API do SheetJS, com cores e bordas) ---- */
 async function carregaXLSX(){
   if(window.XLSX&&XLSX.__estilos)return;
   await new Promise((ok,ko)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';s.onload=ok;s.onerror=ko;document.head.appendChild(s)});
   XLSX.__estilos=true;
 }
-function folhaJornada(R){
-  const AZ='1F4E79',CL='DDEBF7',BD={style:'thin',color:{rgb:'B7C9E0'}};
-  const borda={top:BD,bottom:BD,left:BD,right:BD};
-  const ws={},M=[];let maxR=0;
-  const put=(r,c,v,s,t,z)=>{const o={v,t:t||(typeof v==='number'?'n':'s'),s:s||{}};if(z)o.z=z;ws[XLSX.utils.encode_cell({r,c})]=o;if(r>maxR)maxR=r};
-  const dur=m=>m/1440, dia=iso=>Date.parse(iso+'T00:00:00Z')/86400000+25569;
-  const cen={horizontal:'center',vertical:'center',wrapText:true};
-  const I=rjIdent(),T=R.T;
-  put(1,1,'JORNADA TOTAL — CONTROLO DE TODO O PERÍODO DE TRABALHO',{font:{bold:true,sz:18,color:{rgb:AZ}}});
-  put(2,1,RJ_SUB,{font:{sz:9,color:{rgb:'666666'}}});M.push({s:{r:2,c:1},e:{r:2,c:12}});
-  put(3,1,[I.nome&&'Condutor: '+I.nome,I.cartao&&'Cartão: '+I.cartao,I.empresa,I.matricula&&'Matrícula: '+I.matricula,'Período: '+rjPeriodo(R)].filter(Boolean).join('  ·  '),{font:{sz:10,color:{rgb:AZ}}});
-  M.push({s:{r:3,c:1},e:{r:3,c:12}});
-  const kp=[['Jornada total acumulada',T.jorn],['Condução',T.cond],['Outros trabalhos',T.ot],['Disponib. + Espera',T.disp+T.esp],['Média jornada/dia',T.mediaDia],['Média jornada/semana',T.mediaSem]];
-  kp.forEach(([l,v],i)=>{const c=1+i*2;
-    put(4,c,l,{font:{bold:true,sz:9,color:{rgb:AZ}},fill:{fgColor:{rgb:CL}},alignment:cen});put(4,c+1,'',{fill:{fgColor:{rgb:CL}}});
-    put(5,c,dur(v),{font:{bold:true,sz:16,color:{rgb:AZ}},fill:{fgColor:{rgb:CL}},alignment:cen},'n','[h]:mm');
-    put(5,c+1,'',{fill:{fgColor:{rgb:CL}}});put(6,c,'',{fill:{fgColor:{rgb:CL}}});put(6,c+1,'',{fill:{fgColor:{rgb:CL}}});
-    M.push({s:{r:4,c},e:{r:4,c:c+1}},{s:{r:5,c},e:{r:6,c:c+1}});
-  });
-  put(9,1,'TABELA SEMANAL — JORNADA COMPLETA E COMPONENTES',{font:{bold:true,sz:12,color:{rgb:AZ}}});
-  const cab=['Semana (início)','Semana (fim)','Dias','Condução (h)','Outros trab. (h)','Disponib. (h)','Espera doc. (h)','Pausa (h)','Jornada total (h)','Média jorn./dia','Acumulado (h)'];
-  cab.forEach((h,i)=>put(10,1+i,h,{font:{bold:true,sz:10,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:AZ}},alignment:cen,border:borda}));
-  const cel={font:{sz:10},alignment:{horizontal:'center'},border:borda};
-  let r=11;
-  for(const s of R.sem){
-    put(r,1,dia(s.k),cel,'n','dd/mm/yyyy');put(r,2,dia(s.kEnd),cel,'n','dd/mm/yyyy');put(r,3,s.dias,cel,'n','0');
-    [s.cond,s.ot,s.disp,s.esp,s.pausa].forEach((v,i)=>put(r,4+i,dur(v),cel,'n','[h]:mm'));
-    put(r,9,dur(s.jorn),{...cel,font:{sz:10,bold:true}},'n','[h]:mm');
-    if(s.media==null)put(r,10,'',cel);else put(r,10,dur(s.media),cel,'n','[h]:mm');
-    put(r,11,dur(s.acum),cel,'n','[h]:mm');r++;
-  }
-  const tot={font:{bold:true,sz:10,color:{rgb:AZ}},alignment:{horizontal:'center'},border:borda};
-  put(r,1,'TOTAL',tot);put(r,2,'',tot);put(r,3,T.dias,tot,'n','0');
-  [T.cond,T.ot,T.disp,T.esp,T.pausa,T.jorn,T.mediaDia,T.jorn].forEach((v,i)=>put(r,4+i,dur(v),tot,'n','[h]:mm'));
-  put(r+2,1,RJ_NOTA,{font:{sz:9,color:{rgb:'666666'}},alignment:{wrapText:true,vertical:'top'}});M.push({s:{r:r+2,c:1},e:{r:r+2,c:11}});
-  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:maxR,c:12}});
-  ws['!merges']=M;
-  ws['!cols']=[2,14,14,7,13,14,13,14,11,15,14,13,13].map(w=>({wch:w}));
-  const rows=[];rows[1]={hpt:24};rows[r+2]={hpt:30};ws['!rows']=rows;
-  return ws;
+const XC={AZ:'1F4E79',CL:'DDEBF7',BD:'B7C9E0',ROXO:'CCCCFF'};
+function xFolha(){
+  const BD={style:'thin',color:{rgb:XC.BD}},borda={top:BD,bottom:BD,left:BD,right:BD};
+  const ws={},M=[];let maxR=0,maxC=0;
+  const put=(r,c,v,s,t,z)=>{const o={v,t:t||(typeof v==='number'?'n':'s'),s:s||{}};if(z)o.z=z;ws[XLSX.utils.encode_cell({r,c})]=o;if(r>maxR)maxR=r;if(c>maxC)maxC=c};
+  const fim=(cols,rows)=>{ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:maxR,c:maxC}});ws['!merges']=M;ws['!cols']=cols.map(w=>({wch:w}));if(rows)ws['!rows']=rows;return ws};
+  return {ws,M,put,fim,borda};
 }
+const xDia=iso=>Date.parse(iso+'T00:00:00Z')/86400000+25569;
+const xAbs=abs=>L(abs)/1440+25569;   // minutos UTC → data/hora local em série do Excel
+const XEST={bad:{c:'9C0006',f:'FFC7CE'},warn:{c:'9C6500',f:'FFEB9C'},ok:{c:'006100',f:'C6EFCE'}};
+/* célula de tabela já com tipo, formato e cor condicional */
+function xCel(X,r,c,v,t,base){
+  const s=JSON.parse(JSON.stringify(base));
+  if(v==null||v===''){X.put(r,c,'',s);return}
+  if(t==='d')return X.put(r,c,xDia(v),s,'n','dd/mm/yyyy');
+  if(t==='dt')return X.put(r,c,xAbs(v),s,'n','dd/mm/yyyy h:mm');
+  if(t==='m')return X.put(r,c,xDia(v+'-01'),s,'n','mmm-yy');
+  if(t==='h'||t==='hb'||t==='hA'||t==='hD'){
+    if(t==='hb')s.font={...s.font,bold:true};
+    const red=(t==='hA'&&v>15*60)||(t==='hD'&&v<9*60),amb=t==='hA'&&v>13*60&&v<=15*60;
+    if(red)s.font={...s.font,color:{rgb:XEST.bad.c}},s.fill={fgColor:{rgb:XEST.bad.f}};
+    else if(amb)s.font={...s.font,color:{rgb:XEST.warn.c}},s.fill={fgColor:{rgb:XEST.warn.f}};
+    return X.put(r,c,v/1440,s,'n','[h]:mm');
+  }
+  if(t==='eur')return X.put(r,c,Math.round(v*100)/100,s,'n','#,##0.00 €');
+  if(t==='n')return X.put(r,c,v,s,'n','0');
+  if(t==='e'){const k=corEst(String(v));if(k){s.font={...s.font,color:{rgb:XEST[k].c}};s.fill={fgColor:{rgb:XEST[k].f}}}}
+  if(t==='s')s.alignment={horizontal:'left',vertical:'center'};
+  X.put(r,c,String(v),s);
+}
+/* folha com título, subtítulo, caixas de totais e tabela — o padrão de JORNADA TOTAL, DL 84 e DESCANSOS */
+function xFolhaPadrao(F,R,cols,corKpi){
+  const X=xFolha(),nC=F.cab.length;
+  const cen={horizontal:'center',vertical:'center',wrapText:true};
+  X.put(1,1,F.titulo,{font:{bold:true,sz:18,color:{rgb:XC.AZ}}});
+  X.put(2,1,F.sub,{font:{sz:9,color:{rgb:'666666'}},alignment:{wrapText:true,vertical:'top'}});X.M.push({s:{r:2,c:1},e:{r:2,c:Math.min(nC,12)}});
+  X.put(3,1,rjIdLinha(R).join('  ·  '),{font:{sz:10,color:{rgb:XC.AZ}}});X.M.push({s:{r:3,c:1},e:{r:3,c:Math.min(nC,12)}});
+  (F.kpis||[]).forEach(([l,v,t],i)=>{const c=1+i*2,fill={fgColor:{rgb:corKpi||XC.CL}};
+    X.put(4,c,l,{font:{bold:true,sz:9,color:{rgb:XC.AZ}},fill,alignment:cen});X.put(4,c+1,'',{fill});
+    const sv={font:{bold:true,sz:16,color:{rgb:XC.AZ}},fill,alignment:cen};
+    if(t==='h')X.put(5,c,v/1440,sv,'n','[h]:mm');else if(t==='eur')X.put(5,c,Math.round(v*100)/100,sv,'n','#,##0.00 €');else X.put(5,c,v,sv,'n','0');
+    X.put(5,c+1,'',{fill});X.put(6,c,'',{fill});X.put(6,c+1,'',{fill});
+    X.M.push({s:{r:4,c},e:{r:4,c:c+1}},{s:{r:5,c},e:{r:6,c:c+1}});
+  });
+  X.put(9,1,F.seccao,{font:{bold:true,sz:12,color:{rgb:XC.AZ}}});
+  F.cab.forEach((h,i)=>X.put(10,1+i,h,{font:{bold:true,sz:10,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:XC.AZ}},alignment:cen,border:X.borda}));
+  const base={font:{sz:10},alignment:{horizontal:'center',vertical:'center'},border:X.borda};
+  let r=11;
+  for(const l of F.linhas){l.v.forEach((v,i)=>xCel(X,r,1+i,v,F.tipos[i],l.vazia?{...base,font:{sz:10,color:{rgb:'999999'}}}:base));r++}
+  if(F.total){const tb={font:{bold:true,sz:10,color:{rgb:XC.AZ}},alignment:{horizontal:'center'},border:X.borda};
+    F.total.forEach((v,i)=>typeof v==='number'?xCel(X,r,1+i,v,F.tipos[i]==='hb'?'h':F.tipos[i],tb):X.put(r,1+i,v,tb));r++}
+  if(F.nota){X.put(r+1,1,F.nota,{font:{sz:9,color:{rgb:'666666'}},alignment:{wrapText:true,vertical:'top'}});X.M.push({s:{r:r+1,c:1},e:{r:r+1,c:Math.min(nC,11)}})}
+  const rows=[];rows[1]={hpt:24};rows[2]={hpt:F.sub.length>400?78:F.sub.length>200?48:28};if(F.nota)rows[r+1]={hpt:42};rows[10]={hpt:30};
+  return X.fim(cols,rows);
+}
+function folhaDados(F){
+  const X=xFolha();
+  F.cab.forEach((h,i)=>X.put(0,i,h,{font:{bold:true,sz:10,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:XC.AZ}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:X.borda}));
+  let r=1;
+  for(const l of F.linhas){
+    const base={font:{sz:10},alignment:{horizontal:'center',vertical:'center'},border:X.borda};
+    if(l.extra)base.fill={fgColor:{rgb:'FFF2CC'}};
+    l.v.forEach((v,i)=>{const b=(l.fds&&i<2&&!l.extra)?{...base,fill:{fgColor:{rgb:'FCE4D6'}}}:base;xCel(X,r,i,v,F.tipos[i],b)});r++;
+  }
+  return X.fim([11.4,6,15.7,15.7,8,10,10,12,10,8,8,68,8,8,16],[{hpt:30}]);
+}
+function folhaJornada(R){const F=rjFolhas(R);return xFolhaPadrao(F.jornada,R,[2,14,14,7,13,14,13,14,11,15,14,13,13])}
 async function exportaRelJornada(){
   const R=relJornadaDados(RJ_MES);if(!R)return;
   try{await carregaXLSX()}catch(e){alert('Sem ligação para carregar a biblioteca Excel. Usa Imprimir / PDF, que funciona offline.');return}
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,folhaJornada(R),'JORNADA TOTAL');
+  const F=rjFolhas(R),wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,folhaDados(F.dados),'DADOS');
+  XLSX.utils.book_append_sheet(wb,xFolhaPadrao(F.jornada,R,[2,14,14,7,13,14,13,14,11,15,14,13,13]),'JORNADA TOTAL');
+  XLSX.utils.book_append_sheet(wb,xFolhaPadrao(F.dl84,R,[2,17,14,7,13,15,16,13,14,16,11,10,13,22,18,18,22,14],XC.ROXO),'DL 84 2026');
+  XLSX.utils.book_append_sheet(wb,xFolhaPadrao(F.desc,R,[2,13,17,17,13,17,13,13,24,56,13,16,14,30,12,12,15,15]),'DESCANSOS');
+  XLSX.utils.book_append_sheet(wb,xFolhaPadrao(F.extras,R,[2,13,8,12,60,10,8,12,9,30,14]),'EXTRAS');
   const nome='Relatorio_Jornada_'+(R.mes?R.mes:R.ini+'_a_'+R.fim)+'.xlsx';
   download(nome,new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
 }
 
 /* ---- Exportar ---- */
 function exportar(){
-  return `<div class="card"><h2 style="margin-top:0">Relatório de jornada</h2><p class="note">No mesmo formato da folha <b>JORNADA TOTAL</b> do teu Excel: totais do período, tabela semanal (segunda a domingo) com condução, outros trabalhos, disponibilidade, espera, pausa, jornada, média por dia e acumulado. Dá para ver no ecrã, imprimir / guardar em PDF ou descarregar em Excel com a mesma formatação.</p><br>
+  return `<div class="card"><h2 style="margin-top:0">Relatório de jornada</h2><p class="note">No formato do teu Excel, com as folhas <b>DADOS</b>, <b>JORNADA TOTAL</b>, <b>DL 84 2026</b>, <b>DESCANSOS</b> e <b>EXTRAS</b>. Escolhe o mês ou todo o período; vê no ecrã, imprime / guarda em PDF (uma folha ou todas) ou descarrega o Excel com as 5 folhas formatadas.</p><br>
   <div class="row"><button class="btn amber" id="exRelJ">📄 Abrir relatório de jornada</button></div></div>
   <div class="grid2">
   <div class="card"><h2 style="margin-top:0">Excel (formato da aba DADOS)</h2><p class="note">Mesmas colunas e ordem do livro modelo. Precisa de internet na 1.ª vez (biblioteca).</p><br><button class="btn amber" id="exXlsx">⇩ Exportar .xlsx</button></div>
@@ -2051,6 +2187,7 @@ function bind(){
   if(q('#goRelJ'))q('#goRelJ').onclick=abreRelJ;
   if(q('#rjVolta'))q('#rjVolta').onclick=()=>{TAB=RJ_VOLTA||'exportar';render()};
   if(q('#rjMes'))q('#rjMes').onchange=e=>{RJ_MES=e.target.value;render()};
+  document.querySelectorAll('[data-rja]').forEach(el=>el.onclick=()=>{RJ_ABA=el.dataset.rja;render()});
   if(q('#rjPrint'))q('#rjPrint').onclick=()=>window.print();
   if(q('#rjXlsx'))q('#rjXlsx').onclick=()=>exportaRelJornada();
   if(q('#exXlsx'))q('#exXlsx').onclick=async()=>{
