@@ -1,0 +1,38 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'pt.caio.tacografo'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'pt.caio.tacografo'
+        minSdk 24
+        targetSdk 34
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int)
+        versionName '2.3.' + (System.getenv('GITHUB_RUN_NUMBER') ?: '0')
+    }
+
+    // Chave fixa: assim cada APK nova instala por cima da anterior, sem perder os dados.
+    signingConfigs {
+        release {
+            storeFile file('tacografo.keystore')
+            storePassword 'tacografo-caio'
+            keyAlias 'tacografo'
+            keyPassword 'tacografo-caio'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

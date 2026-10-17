@@ -1866,7 +1866,7 @@ function bind(){
         ...salarioMeses().map(m=>[dPT(m.k+'-01').slice(3),m.dias,m.diasExtra,hm(m.base),hm(m.normais),hm(m.e1),hm(m.eN),hm(m.desc),hm(m.fer),hm(m.not),
           Math.round(m.fixos*100)/100,Math.round(m.extraMan*100)/100,Math.round(m.valor*100)/100])];
       XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sm),'SALARIO MES');
-      XLSX.writeFile(wb,'Tacografo_export.xlsx');
+      download('Tacografo_export.xlsx',new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
     }catch(e){alert('Sem ligação para carregar a biblioteca Excel. Usa o CSV, que funciona offline.')}
   };
 }
