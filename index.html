@@ -160,7 +160,7 @@ td .chk{width:16px;height:16px}
 <main id="main"></main>
 
 <footer>
-  <span class="mono" style="display:block;margin-bottom:4px;color:var(--faint)">v2.4 — relatório de jornada no padrão da folha JORNADA TOTAL (ecrã, PDF e Excel formatado) · v2.3 — aba Conta: amplitude de trabalho e janela noturna; extensões a 10h contam dias com condução &gt; 9h; escala, horas extra e valores a receber; perfil e sincronização; descansos pela lógica das 24h; leitor USB nativo na app Android; bissemanal reinicia após descanso ≥ 45h; inserção manual (discos)</span>
+  <span class="mono" style="display:block;margin-bottom:4px;color:var(--faint)">v2.5 — leitor de cartão lê o histórico completo (corrige buffer circular) com barra de progresso; restaurar backup junta em vez de substituir · v2.4 — relatório de jornada no padrão da folha JORNADA TOTAL (ecrã, PDF e Excel formatado) · v2.3 — aba Conta: amplitude de trabalho e janela noturna; extensões a 10h contam dias com condução &gt; 9h; escala, horas extra e valores a receber; perfil e sincronização; descansos pela lógica das 24h; leitor USB nativo na app Android; bissemanal reinicia após descanso ≥ 45h; inserção manual (discos)</span>
   <span>Os dados nunca saem deste dispositivo. Esta aplicação é uma ferramenta pessoal de apoio: não substitui os registos oficiais do tacógrafo nem aconselhamento jurídico. Reg. (CE) 561/2006 · DL 84/2026.</span>
 </footer>
 <script>
@@ -235,21 +235,39 @@ function parseDDD(buf){
   if(B[0x0504]){
     const ab=B[0x0504][0], dv2=new DataView(ab);
     const pOld=dv2.getUint16(0), pNew=dv2.getUint16(2), N=ab.byteLength-4;
-    const rd=(off,n)=>{off=((off%N)+N)%N;const r=new Uint8Array(n);for(let k=0;k<n;k++)r[k]=new Uint8Array(ab)[4+((off+k)%N)];return r};
-    let off=pOld,guard=0;
-    while(guard++<1500){
+    const U8=new Uint8Array(ab);
+    const rd=(off,n)=>{off=((off%N)+N)%N;const r=new Uint8Array(n);for(let k=0;k<n;k++)r[k]=U8[4+((off+k)%N)];return r};
+    // um registo diário: prevLen(2) recLen(2) data(4) presença(2) distância(2) + mudanças de atividade (2 cada)
+    const leDia=off=>{
       const h=rd(off,12), hv=new DataView(h.buffer);
-      const recLen=hv.getUint16(2), ts=hv.getUint32(4), dist=hv.getUint16(10);
-      if(recLen<12||recLen>N)break;
+      const prev=hv.getUint16(0), recLen=hv.getUint16(2), ts=hv.getUint32(4), dist=hv.getUint16(10);
+      const valido=recLen>=12&&recLen<=12+1440*2&&recLen<=N&&!((recLen-12)&1)&&ts>500000000&&ts<4102444800&&ts%86400===0;
+      if(!valido)return {prev,recLen,ok:false};
       const nA=(recLen-12)>>1, raw=rd(off+12,nA*2), ch=[];
       for(let k=0;k<nA;k++){
         const v=raw[2*k]<<8|raw[2*k+1];
         ch.push({t:Math.floor(ts/60)+(v&0x7FF),a:(v>>11)&3,ins:((v>>13)&1)===0});
       }
-      if(ts>500000000&&ts<4102444800)out.days.push({ts,dist,ch});
+      return {prev,recLen,ok:true,dia:{ts,dist,ch}};
+    };
+    const vistos=new Map();
+    // 1) do registo mais antigo para a frente
+    let off=pOld,guard=0;
+    while(N>0&&guard++<3000){
+      const r=leDia(off);if(!r.ok)break;
+      vistos.set(r.dia.ts,r.dia);
       if(off%N===pNew%N)break;
-      off=(off+recLen)%N;
+      off=(off+r.recLen)%N;
     }
+    // 2) do registo mais recente para trás (recupera o que um registo estragado a meio tenha cortado)
+    off=pNew;guard=0;
+    while(N>0&&guard++<3000){
+      const r=leDia(off);if(!r.ok)break;
+      if(!vistos.has(r.dia.ts))vistos.set(r.dia.ts,r.dia);
+      if(off%N===pOld%N||!r.prev)break;
+      off=((off-r.prev)%N+N)%N;
+    }
+    out.days.push(...[...vistos.values()].sort((a,b)=>a.ts-b.ts));
   }
   if(B[0x0505]){
     const ab=B[0x0505][0],n=(ab.byteLength-2)/31|0,dv2=new DataView(ab);
@@ -326,6 +344,15 @@ const AND=(typeof window!=='undefined'&&window.AndroidUsb)?window.AndroidUsb:nul
 const b64e=b=>{let s='';for(const x of b)s+=String.fromCharCode(x);return btoa(s)};
 const b64d=s=>{const t=atob(s||'');const b=new Uint8Array(t.length);for(let i=0;i<t.length;i++)b[i]=t.charCodeAt(i);return b};
 const hx=b=>[...b].map(x=>x.toString(16).padStart(2,'0').toUpperCase()).join(' ');
+/* barra de progresso da leitura do cartão */
+function rprog(){
+  const P=RD.prog;if(!P)return;
+  const pct=P.total?Math.min(100,Math.round(P.feito/P.total*100)):0;
+  const el=$('#rdProg');if(!el)return;
+  el.querySelector('i').style.width=pct+'%';
+  el.querySelector('.rdPct').textContent=pct+'%';
+  el.querySelector('.rdEtapa').textContent=P.etapa||'';
+}
 function rlog(t,cls){RD.log.push({t,cls:cls||''});const el=$('#rdLog');
   if(el){el.innerHTML=RD.log.map(l=>`<div class="${l.cls}">${esc(l.t)}</div>`).join('');el.scrollTop=el.scrollHeight}}
 function u8(x){return x instanceof Uint8Array?x:new Uint8Array(x)}
@@ -513,7 +540,7 @@ async function selEF(fid){
   }
   return false;
 }
-async function lerEF(max){
+async function lerEF(max,prog){
   let out=new Uint8Array(0),off=0;
   while(off<32767){
     const n=max?Math.min(255,max-off):255;
@@ -522,6 +549,7 @@ async function lerEF(max){
     if(r.sw===0x9000){
       if(!r.dados.length)break;
       out=cat(out,r.dados);off+=r.dados.length;
+      if(prog)prog(r.dados.length);
       if(r.dados.length<n)break;
     }else if(r.sw===0x6B00||r.sw===0x6282||r.sw===0x6A82||r.sw===0x6700)break;
     else throw new Error('READ BINARY devolveu 0x'+r.sw.toString(16).toUpperCase());
@@ -553,7 +581,7 @@ function tlv(fid,app,dados){
   b.set(dados,5);return b;
 }
 async function rdLerCartao(){
-  RD.busy=true;render();
+  RD.busy=true;RD.prog={feito:0,total:1,etapa:'A ligar o cartão…'};render();
   try{
     rlog('A ligar o cartão…');
     const atr=await ccidLigaCartao();
@@ -563,17 +591,26 @@ async function rdLerCartao(){
     if(!await selApp())throw new Error('Não encontrei a aplicação de tacógrafo neste cartão. É mesmo um cartão de condutor?');
     rlog('Aplicação de tacógrafo selecionada.','ok');
     let ficheiro=new Uint8Array(0),tam={},semAss=0;
+    // estimativa até se saber o tamanho real (vem no ficheiro 0501); depois é exata
+    const EST={0x0502:1728,0x0503:1152,0x0504:13780,0x0505:6202,0x0506:1121,0x0522:562};
+    const tamDe=(fid,fixo)=>fixo||tam[fid]||EST[fid]||200;
+    const feitos=new Set();
+    const total=()=>EFS.reduce((s,[f,fx])=>s+tamDe(f,fx),0);
+    Object.assign(RD.prog,{feito:0,total:total(),etapa:'A ler o cartão…'});rprog();
     for(const [fid,fixo,ass,nome] of EFS){
-      if(!await selEF(fid)){rlog('· '+nome+': não existe no cartão','dim');continue}
+      RD.prog.etapa='A ler: '+nome;RD.prog.total=total();rprog();
+      const antes=RD.prog.feito;
+      const fecha=()=>{feitos.add(fid);RD.prog.feito=antes+tamDe(fid,fixo);rprog()};
+      if(!await selEF(fid)){rlog('· '+nome+': não existe no cartão','dim');fecha();continue}
       let hashOk=false;
       if(ass){try{hashOk=(await apdu(new Uint8Array([0x80,0x2A,0x90,0x00]))).sw===0x9000}catch(e){}}
-      const dados=await lerEF(fixo||tam[fid]||0);
-      if(!dados.length){rlog('· '+nome+': vazio','dim');continue}
+      const dados=await lerEF(fixo||tam[fid]||0,n=>{RD.prog.feito=Math.min(RD.prog.feito+n,antes+tamDe(fid,fixo));rprog()});
+      if(!dados.length){rlog('· '+nome+': vazio','dim');fecha();continue}
       ficheiro=cat(ficheiro,tlv(fid,0,dados));
       rlog('· '+nome+': '+dados.length+' bytes','ok');
       if(fid===0x0501&&dados.length>=10){ // dimensões dos ficheiros variáveis
         tam[0x0502]=dados[3]*6*24;tam[0x0503]=dados[4]*2*24;
-        tam[0x0504]=(dados[5]<<8|dados[6]);
+        tam[0x0504]=4+(dados[5]<<8|dados[6]); // 2 ponteiros (4 bytes) + buffer circular de atividades
         tam[0x0505]=2+(dados[7]<<8|dados[8])*31;tam[0x0506]=1+dados[9]*10;
       }
       if(ass){
@@ -581,6 +618,7 @@ async function rdLerCartao(){
         try{sig=hashOk?await assinaturaSo():await assinatura()}catch(e){}
         if(sig)ficheiro=cat(ficheiro,tlv(fid,1,sig));else semAss++;
       }
+      fecha();
       await new Promise(s=>setTimeout(s,0));
     }
     if(!ficheiro.length)throw new Error('Não saiu nada do cartão.');
@@ -590,9 +628,12 @@ async function rdLerCartao(){
     RD.nome=p.ident?((p.ident.nome+'_'+p.ident.ap).replace(/[^A-Za-z0-9_]/g,'')||'cartao'):'cartao';
     RAW.push(p);
     try{await IDB.set('leitor_'+Date.now(),ficheiro.buffer.slice(0))}catch(e){}
-    rlog('Leitura completa: '+ficheiro.length+' bytes, '+p.days.length+' dias de atividade.','ok');
+    const d0=p.days.length?dPT(dISO(new Date(p.days[0].ts*1000))):'—', d1=p.days.length?dPT(dISO(new Date(p.days[p.days.length-1].ts*1000))):'—';
+    rlog('Leitura completa: '+ficheiro.length+' bytes, '+p.days.length+' dias de atividade ('+d0+' a '+d1+').','ok');
+    RD.prog={feito:1,total:1,etapa:'Concluído — '+p.days.length+' dias lidos, de '+d0+' a '+d1,fim:true};
     RD.busy=false;rebuild();
   }catch(e){
+    if(RD.prog)RD.prog.etapa='Falhou: '+e.message;
     rlog('Falhou: '+e.message,'bad');RD.busy=false;render();
   }
 }
@@ -672,6 +713,17 @@ function nvJunta(loc,rem,remNovo){
     for(const k of Object.keys(rem.perfil)) if(!out.perfil[k]) out.perfil[k]=rem.perfil[k];
   }
   return out;
+}
+/* Restaurar um backup JUNTA-O ao que já existe: o que já está preenchido neste aparelho fica
+   sempre; o backup só preenche o que falta. Nada é apagado nem substituído. */
+function restauraBackup(b){
+  const cont=k=>Object.keys((b&&b[k])||{}).length;
+  const n={obs:cont('obs'),extra:cont('extra'),xmeta:cont('xmeta'),man:cont('man'),km:cont('km'),espera:cont('espera')};
+  const junto=nvJunta(estadoLocal(),b||{},false);
+  // contrato/salário: se ainda não foi definido aqui, vem do backup
+  if(b&&b.contrato&&!Object.keys(S.contrato||{}).length)junto.contrato=b.contrato;
+  Object.assign(S,junto);save();rebuild();
+  return n;
 }
 function estadoLocal(){
   return {espera:S.espera,obs:S.obs,extra:S.extra,km:S.km,xmeta:S.xmeta,dest:S.dest,
@@ -1222,6 +1274,10 @@ function leitor(){
       <button class="btn" id="rdAll" ${tem?'':'disabled'}>Ver todos os aparelhos</button></div>`}
     ${(tem||AND)?'':'<div class="alert MAXIMA"><span class="g">SEM SUPORTE</span> · Este browser não tem WebUSB. No Android usa o Chrome, ou instala a app própria; no iPhone não é possível.</div>'}
   </div>
+  ${RD.prog?`<div class="card" id="rdProg">
+    <div class="row" style="margin:0 0 8px;justify-content:space-between"><b class="rdEtapa">${esc(RD.prog.etapa||'')}</b><span class="mono rdPct">${RD.prog.total?Math.min(100,Math.round(RD.prog.feito/RD.prog.total*100)):0}%</span></div>
+    <div class="bar" style="height:14px"><i style="width:${RD.prog.total?Math.min(100,Math.round(RD.prog.feito/RD.prog.total*100)):0}%;transition:width .25s"></i></div>
+    <p class="note" style="margin-top:8px">${RD.prog.fim?'Os dias lidos juntam-se aos que já tinhas: nada do que estava guardado é apagado.':'Não tires o cartão nem o cabo até chegar aos 100%.'}</p></div>`:''}
   <h2>Registo da leitura</h2>
   <div class="card" style="padding:10px 12px"><div id="rdLog" class="mono" style="font-size:11.5px;max-height:260px;overflow:auto;line-height:1.6">${RD.log.length?RD.log.map(l=>`<div class="${l.cls}">${esc(l.t)}</div>`).join(''):'<span class="note">Ainda sem leituras.</span>'}</div></div>
   ${RD.bloqueado?`<div class="alert MUITO_GRAVE"><span class="g">LIMITAÇÃO DO BROWSER</span> · O Chrome bloqueia o acesso a leitores de smart card a partir de páginas web (classe USB 0x0B, protegida desde 2018 por causa de um problema de segurança com chaves U2F). Nenhum site consegue contornar isto — só uma app instalada. Vê as alternativas em baixo.<div class="lb">WebUSB — lista de classes de interface protegidas</div></div>`:''}
@@ -1809,7 +1865,7 @@ function exportar(){
   <div class="card"><h2 style="margin-top:0">Excel (formato da aba DADOS)</h2><p class="note">Mesmas colunas e ordem do livro modelo. Precisa de internet na 1.ª vez (biblioteca).</p><br><button class="btn amber" id="exXlsx">⇩ Exportar .xlsx</button></div>
   <div class="card"><h2 style="margin-top:0">CSV</h2><p class="note">Tabela DADOS em CSV (compatível com Excel).</p><br><button class="btn" id="exCsv">⇩ Exportar .csv</button></div>
   <div class="card"><h2 style="margin-top:0">PDF</h2><p class="note">Dossier de fiscalização pronto a imprimir/guardar como PDF.</p><br><button class="btn" id="exPdf">🖨 Gerar dossier</button></div>
-  <div class="card"><h2 style="margin-top:0">JSON — backup das notas</h2><p class="note">Observações, espera doc., extras, destinos, controlos e <b>dias inseridos à mão (discos)</b>. Faz este backup com regularidade: os dias manuais só existem neste dispositivo.</p><br>
+  <div class="card"><h2 style="margin-top:0">JSON — backup das notas</h2><p class="note">Observações, espera doc., extras, destinos, controlos e <b>dias inseridos à mão (discos)</b>. Faz este backup com regularidade: os dias manuais só existem neste dispositivo. <b>Restaurar junta</b> o backup ao que já tens — não apaga nada.</p><br>
   <div class="row"><button class="btn" id="exJson">⇩ Backup</button><button class="btn" id="imJson">⇪ Restaurar</button><input type="file" id="jsonIn" accept=".json" hidden></div></div>
   </div>
   <div class="card"><h2 style="margin-top:0">Repor</h2><p class="note">Apaga as notas e os dias inseridos à mão neste dispositivo (os ficheiros do cartão não são afetados). Exporta o backup JSON antes.</p><br><button class="btn danger" id="exWipe">Apagar notas manuais</button></div>`;
@@ -1982,7 +2038,11 @@ function bind(){
   if(q('#exCsv'))q('#exCsv').onclick=()=>{const csv=dadosMatrix().map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\r\n');download('DADOS_tacografo.csv',new Blob(['\ufeff'+csv],{type:'text/csv'}))};
   if(q('#exJson'))q('#exJson').onclick=()=>download('backup_notas_tacografo.json',new Blob([JSON.stringify(S,null,1)],{type:'application/json'}));
   if(q('#imJson'))q('#imJson').onclick=()=>q('#jsonIn').click();
-  if(q('#jsonIn'))q('#jsonIn').onchange=async e=>{try{Object.assign(S,JSON.parse(await e.target.files[0].text()));save();rebuild()}catch(x){alert('Ficheiro JSON inválido.')}};
+  if(q('#jsonIn'))q('#jsonIn').onchange=async e=>{
+    let b;try{b=JSON.parse(await e.target.files[0].text())}catch(x){alert('Ficheiro JSON inválido.');e.target.value='';return}
+    const n=restauraBackup(b);e.target.value='';
+    alert('Backup junto aos dados que já tinhas (o que já estava preenchido ficou igual):\n· '+n.obs+' observações\n· '+n.extra+' dias extra\n· '+n.xmeta+' valores de extras\n· '+n.man+' dias inseridos à mão\n· '+n.km+' KM e '+n.espera+' esperas');
+  };
   if(q('#exWipe'))q('#exWipe').onclick=()=>{if(confirm('Apagar todas as notas manuais?')){localStorage.removeItem(LS);location.reload()}};
   if(q('#exPdf'))q('#exPdf').onclick=()=>{TAB='fisc';render();setTimeout(()=>window.print(),150)};
   // --- relatório de jornada ---
@@ -2044,7 +2104,10 @@ const IDB={
   chaves:async()=>{const db=await IDB.open();return new Promise((ok,ko)=>{const t=db.transaction('files');const rq=t.objectStore('files').getAllKeys();rq.onsuccess=()=>ok(rq.result.map(String));rq.onerror=ko})},
   all:async()=>{const db=await IDB.open();return new Promise((ok,ko)=>{const t=db.transaction('files');const rq=t.objectStore('files').getAll();rq.onsuccess=()=>ok(rq.result);rq.onerror=ko})}
 };
-(async()=>{try{
+(async()=>{
+  // pede ao browser para não apagar os dados desta app quando faltar espaço
+  try{if(navigator.storage&&navigator.storage.persist)await navigator.storage.persist()}catch(e){}
+  try{
   const stored=await IDB.all();
   if(stored&&stored.length)for(const b of stored){try{RAW.push(parseDDD(b))}catch(x){}}
 }catch(e){}
