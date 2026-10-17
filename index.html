@@ -97,13 +97,37 @@ input.obs{width:200px}
 td .chk{width:16px;height:16px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:640px){.grid2{grid-template-columns:1fr}}
+/* relatório de jornada — mesmo padrão da folha "JORNADA TOTAL" do Excel (papel branco, azul 1F4E79) */
+.rj{background:#fff;color:#222;border-radius:var(--r);padding:22px 20px;font-family:Calibri,'Segoe UI',system-ui,sans-serif}
+.rj h3{color:#1F4E79;font-size:22px;font-weight:700;margin:0 0 4px}
+.rj .rj-sub{font-size:11px;color:#666;margin-bottom:6px}
+.rj .rj-id{font-size:12px;color:#1F4E79;margin-bottom:14px}
+.rj .rj-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:22px}
+@media(max-width:760px){.rj .rj-kpis{grid-template-columns:repeat(2,1fr)}}
+.rj .rj-k{background:#DDEBF7;color:#1F4E79;text-align:center;padding:8px 6px}
+.rj .rj-k span{display:block;font-size:10.5px;font-weight:700}
+.rj .rj-k b{display:block;font-size:20px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
+.rj h4{color:#1F4E79;font-size:15px;font-weight:700;margin:0 0 6px}
+.rj .rj-tw{overflow-x:auto}
+.rj table{border-collapse:collapse;width:100%;font-size:12.5px;background:#fff;white-space:nowrap}
+.rj th{position:static;background:#1F4E79;color:#fff;font-weight:700;font-size:11.5px;text-transform:none;letter-spacing:0;text-align:center;padding:6px 7px;border:1px solid #B7C9E0}
+.rj td{text-align:center;padding:4px 7px;border:1px solid #B7C9E0;color:#222;font-variant-numeric:tabular-nums}
+.rj tr.vazia td{color:#999}
+.rj tr.tot td{font-weight:700;color:#1F4E79}
+.rj .rj-nota{font-size:10.5px;color:#666;margin-top:10px}
+@media print{
+  .rj{padding:0;border-radius:0}
+  .rj .rj-kpis{grid-template-columns:repeat(6,1fr)}
+  .rj table{font-size:9.5px}.rj th{font-size:9px;padding:4px}.rj td{padding:3px 4px}
+  .rj th,.rj .rj-k{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
 @media(min-width:900px){
   nav{position:sticky;top:57px;bottom:auto;border-top:none;border-bottom:1px solid var(--line)}
   body{padding-bottom:20px}
 }
 @media print{
   body{background:#fff;color:#000;padding:0}
-  header,nav,.noprint,footer .hide{display:none!important}
+  header,nav,.noprint,footer .hide,footer .mono{display:none!important}
   .card,.tw,.kpi,.alert{border-color:#bbb;background:#fff}
   th{background:#eee;color:#333}
   section{display:none}section.print{display:block!important}
@@ -136,7 +160,7 @@ td .chk{width:16px;height:16px}
 <main id="main"></main>
 
 <footer>
-  <span class="mono" style="display:block;margin-bottom:4px;color:var(--faint)">v2.3 — aba Conta: amplitude de trabalho e janela noturna; extensões a 10h contam dias com condução &gt; 9h; escala, horas extra e valores a receber; perfil e sincronização; descansos pela lógica das 24h; leitor USB nativo na app Android; bissemanal reinicia após descanso ≥ 45h; inserção manual (discos)</span>
+  <span class="mono" style="display:block;margin-bottom:4px;color:var(--faint)">v2.4 — relatório de jornada no padrão da folha JORNADA TOTAL (ecrã, PDF e Excel formatado) · v2.3 — aba Conta: amplitude de trabalho e janela noturna; extensões a 10h contam dias com condução &gt; 9h; escala, horas extra e valores a receber; perfil e sincronização; descansos pela lógica das 24h; leitor USB nativo na app Android; bissemanal reinicia após descanso ≥ 45h; inserção manual (discos)</span>
   <span>Os dados nunca saem deste dispositivo. Esta aplicação é uma ferramenta pessoal de apoio: não substitui os registos oficiais do tacógrafo nem aconselhamento jurídico. Reg. (CE) 561/2006 · DL 84/2026.</span>
 </footer>
 <script>
@@ -1124,8 +1148,8 @@ function render(){
   else if(P.nome||P.cartao)$('#hDriver').textContent=[P.nome,P.ap].filter(Boolean).join(' ')+(P.cartao?' · cartão '+P.cartao:'')+(P.empresa?' · '+P.empresa:'');
   $('#tzSel').value=S.tz;
   if(!ROWS.length&&!['manual','leitor','conta'].includes(TAB)){M.innerHTML=empty();return}
-  const V={painel,registos,leitor,manual,jornada,lei84,descansos,destinos,extras,alertas,fisc,salario,exportar,conta};
-  M.innerHTML=`<section class="on ${TAB==='fisc'?'print':''}" id="sec">${V[TAB]()}</section>`;
+  const V={painel,registos,leitor,manual,jornada,lei84,descansos,destinos,extras,alertas,fisc,salario,exportar,conta,reljornada:relJornada};
+  M.innerHTML=`<section class="on ${TAB==='fisc'||TAB==='reljornada'?'print':''}" id="sec">${V[TAB]()}</section>`;
   bind();
 }
 
@@ -1449,7 +1473,8 @@ function manual(){
 function jornada(){
   const T=ROWS.reduce((s,r)=>({j:s.j+r.jornada,c:s.c+r.cond,o:s.o+r.ot,de:s.de+r.disp+r.esp}),{j:0,c:0,o:0,de:0});
   const rows=WEEKS.map(w=>`<tr><td>${dPT(w.k)}</td><td>${dPT(w.kEnd)}</td><td class="t">${w.dias}</td><td class="t">${hm(w.cond)}</td><td class="t">${hm(w.ot)}</td><td class="t">${hm(w.disp)}</td><td class="t">${hm(w.esp)}</td><td class="t">${hm(w.pausa)}</td><td class="t"><b>${hm(w.jorn)}</b></td><td class="t">${hm(w.jorn/w.dias)}</td><td class="t">${hm(w.acum)}</td></tr>`).join('');
-  return `<div class="kgrid">
+  return `<div class="row noprint" style="margin-top:0"><button class="btn amber" id="goRelJ">📄 Relatório de jornada (PDF / Excel)</button></div>
+  <div class="kgrid">
     ${kpi('Jornada acumulada',hm(T.j))}${kpi('Condução',hm(T.c))}${kpi('Outros trabalhos',hm(T.o))}
     ${kpi('Disp. + Espera',hm(T.de))}${kpi('Média jornada/dia',hm(T.j/ROWS.length))}${kpi('Média jornada/semana',hm(T.j/WEEKS.length))}</div>
   <h2>Tabela semanal — jornada porta-a-porta</h2>
@@ -1662,9 +1687,125 @@ function fisc(){
   <button class="btn amber" onclick="window.print()">🖨 Dossier PDF</button></div>`;
 }
 
+/* ---- Relatório de jornada (padrão da folha "JORNADA TOTAL" do Excel) ---- */
+let RJ_MES='',RJ_VOLTA='exportar';
+function relJornadaDados(mes){
+  const rows=ROWS.filter(r=>!mes||r.iso.slice(0,7)===mes);
+  if(!rows.length)return null;
+  const seg=iso=>{const d=new Date(iso+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));return dISO(d)};
+  const fim=rows[rows.length-1].iso, sem=[];let acum=0;
+  for(let d=new Date(seg(rows[0].iso)+'T00:00:00Z');dISO(d)<=fim;d.setUTCDate(d.getUTCDate()+7)){
+    const k=dISO(d),e=new Date(d);e.setUTCDate(e.getUTCDate()+6);const kEnd=dISO(e);
+    const rs=rows.filter(r=>r.iso>=k&&r.iso<=kEnd);
+    const s={k,kEnd,dias:rs.filter(r=>r.jornada>0).length,cond:0,ot:0,disp:0,esp:0,pausa:0,jorn:0};
+    for(const r of rs){s.cond+=r.cond;s.ot+=r.ot;s.disp+=r.disp;s.esp+=r.esp;s.pausa+=r.pausa;s.jorn+=r.jornada}
+    acum+=s.jorn;s.media=s.dias?s.jorn/s.dias:null;s.acum=acum;sem.push(s);
+  }
+  const T={dias:0,cond:0,ot:0,disp:0,esp:0,pausa:0,jorn:0};
+  for(const s of sem)for(const f in T)T[f]+=s[f];
+  T.mediaDia=T.dias?T.jorn/T.dias:0;T.mediaSem=sem.length?T.jorn/sem.length:0;
+  return {sem,T,ini:rows[0].iso,fim,mes};
+}
+function rjIdent(){
+  const P=S.perfil||{};
+  const nome=IDENT?(IDENT.nome+' '+IDENT.ap):[P.nome,P.ap].filter(Boolean).join(' ');
+  const cartao=IDENT?IDENT.card:(P.cartao||'');
+  return {nome:nome.trim(),cartao,empresa:P.empresa||'',matricula:P.matricula||''};
+}
+function rjPeriodo(R){return R.mes?'Mês de '+dPT(R.mes+'-01').slice(3):dPT(R.ini)+' a '+dPT(R.fim)}
+const RJ_SUB='Soma toda a jornada (Início ao Fim) e os seus componentes: Condução + Outros Trabalhos + Disponibilidade + Espera Doc. + Pausa. Semana = segunda a domingo.';
+const RJ_NOTA='Nota: a coluna Acumulado soma a jornada total desde a primeira semana do relatório. Fonte de dados: registos do cartão de condutor e dias inseridos à mão (Condução, Outros Trabalhos, Disponibilidade, Espera Doc., Pausa e Jornada).';
+function relJornada(){
+  const ms=[...new Set(ROWS.map(r=>r.iso.slice(0,7)))];
+  const R=relJornadaDados(RJ_MES);
+  const ctl=`<div class="row noprint"><button class="btn" id="rjVolta">← Voltar</button>
+    <select id="rjMes" aria-label="Período"><option value="">Todo o período</option>${ms.map(m=>`<option value="${m}" ${RJ_MES===m?'selected':''}>${dPT(m+'-01').slice(3)}</option>`).join('')}</select>
+    <button class="btn amber" id="rjPrint">🖨 Imprimir / PDF</button><button class="btn" id="rjXlsx">⇩ Excel</button></div>`;
+  if(!R)return ctl+'<div class="empty">Sem dias de trabalho no período escolhido.</div>';
+  const I=rjIdent(),T=R.T;
+  const idl=[I.nome&&'Condutor: '+esc(I.nome),I.cartao&&'Cartão: '+esc(I.cartao),I.empresa&&esc(I.empresa),I.matricula&&'Matrícula: '+esc(I.matricula),'Período: '+rjPeriodo(R)].filter(Boolean).join(' · ');
+  const k=(l,v)=>`<div class="rj-k"><span>${l}</span><b>${v}</b></div>`;
+  const z=m=>m?hm(m):'0:00';
+  const linhas=R.sem.map(s=>`<tr class="${s.dias?'':'vazia'}"><td>${dPT(s.k)}</td><td>${dPT(s.kEnd)}</td><td>${s.dias}</td>
+    <td>${z(s.cond)}</td><td>${z(s.ot)}</td><td>${z(s.disp)}</td><td>${z(s.esp)}</td><td>${z(s.pausa)}</td>
+    <td><b>${z(s.jorn)}</b></td><td>${s.media==null?'':hm(s.media)}</td><td>${z(s.acum)}</td></tr>`).join('');
+  return ctl+`<div class="rj">
+    <h3>JORNADA TOTAL — CONTROLO DE TODO O PERÍODO DE TRABALHO</h3>
+    <div class="rj-sub">${RJ_SUB}</div>
+    <div class="rj-id">${idl}</div>
+    <div class="rj-kpis">${k('Jornada total acumulada',hm(T.jorn))}${k('Condução',hm(T.cond))}${k('Outros trabalhos',hm(T.ot))}
+      ${k('Disponib. + Espera',hm(T.disp+T.esp))}${k('Média jornada/dia',hm(T.mediaDia))}${k('Média jornada/semana',hm(T.mediaSem))}</div>
+    <h4>TABELA SEMANAL — JORNADA COMPLETA E COMPONENTES</h4>
+    <div class="rj-tw"><table>
+      <thead><tr><th>Semana (início)</th><th>Semana (fim)</th><th>Dias</th><th>Condução (h)</th><th>Outros trab. (h)</th><th>Disponib. (h)</th><th>Espera doc. (h)</th><th>Pausa (h)</th><th>Jornada total (h)</th><th>Média jorn./dia</th><th>Acumulado (h)</th></tr></thead>
+      <tbody>${linhas}</tbody>
+      <tfoot><tr class="tot"><td>TOTAL</td><td></td><td>${T.dias}</td><td>${hm(T.cond)}</td><td>${hm(T.ot)}</td><td>${hm(T.disp)}</td><td>${hm(T.esp)}</td><td>${hm(T.pausa)}</td><td>${hm(T.jorn)}</td><td>${hm(T.mediaDia)}</td><td>${hm(T.jorn)}</td></tr></tfoot>
+    </table></div>
+    <div class="rj-nota">${RJ_NOTA}</div>
+    <div class="rj-nota">Gerado em ${new Date().toLocaleString('pt-PT')} · Controle de Tacógrafo</div>
+  </div>`;
+}
+/* ---- Excel com formatação (xlsx-js-style: mesma API do SheetJS, com cores e bordas) ---- */
+async function carregaXLSX(){
+  if(window.XLSX&&XLSX.__estilos)return;
+  await new Promise((ok,ko)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';s.onload=ok;s.onerror=ko;document.head.appendChild(s)});
+  XLSX.__estilos=true;
+}
+function folhaJornada(R){
+  const AZ='1F4E79',CL='DDEBF7',BD={style:'thin',color:{rgb:'B7C9E0'}};
+  const borda={top:BD,bottom:BD,left:BD,right:BD};
+  const ws={},M=[];let maxR=0;
+  const put=(r,c,v,s,t,z)=>{const o={v,t:t||(typeof v==='number'?'n':'s'),s:s||{}};if(z)o.z=z;ws[XLSX.utils.encode_cell({r,c})]=o;if(r>maxR)maxR=r};
+  const dur=m=>m/1440, dia=iso=>Date.parse(iso+'T00:00:00Z')/86400000+25569;
+  const cen={horizontal:'center',vertical:'center',wrapText:true};
+  const I=rjIdent(),T=R.T;
+  put(1,1,'JORNADA TOTAL — CONTROLO DE TODO O PERÍODO DE TRABALHO',{font:{bold:true,sz:18,color:{rgb:AZ}}});
+  put(2,1,RJ_SUB,{font:{sz:9,color:{rgb:'666666'}}});M.push({s:{r:2,c:1},e:{r:2,c:12}});
+  put(3,1,[I.nome&&'Condutor: '+I.nome,I.cartao&&'Cartão: '+I.cartao,I.empresa,I.matricula&&'Matrícula: '+I.matricula,'Período: '+rjPeriodo(R)].filter(Boolean).join('  ·  '),{font:{sz:10,color:{rgb:AZ}}});
+  M.push({s:{r:3,c:1},e:{r:3,c:12}});
+  const kp=[['Jornada total acumulada',T.jorn],['Condução',T.cond],['Outros trabalhos',T.ot],['Disponib. + Espera',T.disp+T.esp],['Média jornada/dia',T.mediaDia],['Média jornada/semana',T.mediaSem]];
+  kp.forEach(([l,v],i)=>{const c=1+i*2;
+    put(4,c,l,{font:{bold:true,sz:9,color:{rgb:AZ}},fill:{fgColor:{rgb:CL}},alignment:cen});put(4,c+1,'',{fill:{fgColor:{rgb:CL}}});
+    put(5,c,dur(v),{font:{bold:true,sz:16,color:{rgb:AZ}},fill:{fgColor:{rgb:CL}},alignment:cen},'n','[h]:mm');
+    put(5,c+1,'',{fill:{fgColor:{rgb:CL}}});put(6,c,'',{fill:{fgColor:{rgb:CL}}});put(6,c+1,'',{fill:{fgColor:{rgb:CL}}});
+    M.push({s:{r:4,c},e:{r:4,c:c+1}},{s:{r:5,c},e:{r:6,c:c+1}});
+  });
+  put(9,1,'TABELA SEMANAL — JORNADA COMPLETA E COMPONENTES',{font:{bold:true,sz:12,color:{rgb:AZ}}});
+  const cab=['Semana (início)','Semana (fim)','Dias','Condução (h)','Outros trab. (h)','Disponib. (h)','Espera doc. (h)','Pausa (h)','Jornada total (h)','Média jorn./dia','Acumulado (h)'];
+  cab.forEach((h,i)=>put(10,1+i,h,{font:{bold:true,sz:10,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:AZ}},alignment:cen,border:borda}));
+  const cel={font:{sz:10},alignment:{horizontal:'center'},border:borda};
+  let r=11;
+  for(const s of R.sem){
+    put(r,1,dia(s.k),cel,'n','dd/mm/yyyy');put(r,2,dia(s.kEnd),cel,'n','dd/mm/yyyy');put(r,3,s.dias,cel,'n','0');
+    [s.cond,s.ot,s.disp,s.esp,s.pausa].forEach((v,i)=>put(r,4+i,dur(v),cel,'n','[h]:mm'));
+    put(r,9,dur(s.jorn),{...cel,font:{sz:10,bold:true}},'n','[h]:mm');
+    if(s.media==null)put(r,10,'',cel);else put(r,10,dur(s.media),cel,'n','[h]:mm');
+    put(r,11,dur(s.acum),cel,'n','[h]:mm');r++;
+  }
+  const tot={font:{bold:true,sz:10,color:{rgb:AZ}},alignment:{horizontal:'center'},border:borda};
+  put(r,1,'TOTAL',tot);put(r,2,'',tot);put(r,3,T.dias,tot,'n','0');
+  [T.cond,T.ot,T.disp,T.esp,T.pausa,T.jorn,T.mediaDia,T.jorn].forEach((v,i)=>put(r,4+i,dur(v),tot,'n','[h]:mm'));
+  put(r+2,1,RJ_NOTA,{font:{sz:9,color:{rgb:'666666'}},alignment:{wrapText:true,vertical:'top'}});M.push({s:{r:r+2,c:1},e:{r:r+2,c:11}});
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:maxR,c:12}});
+  ws['!merges']=M;
+  ws['!cols']=[2,14,14,7,13,14,13,14,11,15,14,13,13].map(w=>({wch:w}));
+  const rows=[];rows[1]={hpt:24};rows[r+2]={hpt:30};ws['!rows']=rows;
+  return ws;
+}
+async function exportaRelJornada(){
+  const R=relJornadaDados(RJ_MES);if(!R)return;
+  try{await carregaXLSX()}catch(e){alert('Sem ligação para carregar a biblioteca Excel. Usa Imprimir / PDF, que funciona offline.');return}
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,folhaJornada(R),'JORNADA TOTAL');
+  const nome='Relatorio_Jornada_'+(R.mes?R.mes:R.ini+'_a_'+R.fim)+'.xlsx';
+  download(nome,new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+}
+
 /* ---- Exportar ---- */
 function exportar(){
-  return `<div class="grid2">
+  return `<div class="card"><h2 style="margin-top:0">Relatório de jornada</h2><p class="note">No mesmo formato da folha <b>JORNADA TOTAL</b> do teu Excel: totais do período, tabela semanal (segunda a domingo) com condução, outros trabalhos, disponibilidade, espera, pausa, jornada, média por dia e acumulado. Dá para ver no ecrã, imprimir / guardar em PDF ou descarregar em Excel com a mesma formatação.</p><br>
+  <div class="row"><button class="btn amber" id="exRelJ">📄 Abrir relatório de jornada</button></div></div>
+  <div class="grid2">
   <div class="card"><h2 style="margin-top:0">Excel (formato da aba DADOS)</h2><p class="note">Mesmas colunas e ordem do livro modelo. Precisa de internet na 1.ª vez (biblioteca).</p><br><button class="btn amber" id="exXlsx">⇩ Exportar .xlsx</button></div>
   <div class="card"><h2 style="margin-top:0">CSV</h2><p class="note">Tabela DADOS em CSV (compatível com Excel).</p><br><button class="btn" id="exCsv">⇩ Exportar .csv</button></div>
   <div class="card"><h2 style="margin-top:0">PDF</h2><p class="note">Dossier de fiscalização pronto a imprimir/guardar como PDF.</p><br><button class="btn" id="exPdf">🖨 Gerar dossier</button></div>
@@ -1844,11 +1985,20 @@ function bind(){
   if(q('#jsonIn'))q('#jsonIn').onchange=async e=>{try{Object.assign(S,JSON.parse(await e.target.files[0].text()));save();rebuild()}catch(x){alert('Ficheiro JSON inválido.')}};
   if(q('#exWipe'))q('#exWipe').onclick=()=>{if(confirm('Apagar todas as notas manuais?')){localStorage.removeItem(LS);location.reload()}};
   if(q('#exPdf'))q('#exPdf').onclick=()=>{TAB='fisc';render();setTimeout(()=>window.print(),150)};
+  // --- relatório de jornada ---
+  const abreRelJ=()=>{RJ_VOLTA=TAB;TAB='reljornada';render();scrollTo(0,0)};
+  if(q('#exRelJ'))q('#exRelJ').onclick=abreRelJ;
+  if(q('#goRelJ'))q('#goRelJ').onclick=abreRelJ;
+  if(q('#rjVolta'))q('#rjVolta').onclick=()=>{TAB=RJ_VOLTA||'exportar';render()};
+  if(q('#rjMes'))q('#rjMes').onchange=e=>{RJ_MES=e.target.value;render()};
+  if(q('#rjPrint'))q('#rjPrint').onclick=()=>window.print();
+  if(q('#rjXlsx'))q('#rjXlsx').onclick=()=>exportaRelJornada();
   if(q('#exXlsx'))q('#exXlsx').onclick=async()=>{
     try{
-      if(!window.XLSX)await new Promise((ok,ko)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=ok;s.onerror=ko;document.head.appendChild(s)});
+      await carregaXLSX();
       const wb=XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dadosMatrix()),'DADOS');
+      {const R=relJornadaDados('');if(R)XLSX.utils.book_append_sheet(wb,folhaJornada(R),'JORNADA TOTAL');}
       const wkm=[['Semana (início)','Semana (fim)','Dias','Trabalho','Jornada','Média 4m','Margem 60h','Estado','Condução','Bissem. #','Acum. bissem.','Cond. bissem.'],
         ...WEEKS.map(w=>[dPT(w.k),dPT(w.kEnd),w.dias,hm(w.trab),hm(w.jorn),hm(w.m4),hm(w.margem),w.estado,hm(w.cond),(w.biIdx??0)+1,hm(w.bis),hm(w.bisC)])];
       XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(wkm),'LEI 84-2026');
@@ -1896,8 +2046,9 @@ const IDB={
 };
 (async()=>{try{
   const stored=await IDB.all();
-  if(stored&&stored.length){for(const b of stored)RAW.push(parseDDD(b));rebuild()}
+  if(stored&&stored.length)for(const b of stored){try{RAW.push(parseDDD(b))}catch(x){}}
 }catch(e){}
+  if(RAW.length||Object.keys(S.man||{}).length)rebuild(); // dias inseridos à mão contam mesmo sem ficheiros do cartão
   if(nvLig()&&S.nuvem.auto&&navigator.onLine){try{await nvSincroniza()}catch(e){}}
 })();
 const _oldChange=$('#fileIn').onchange;
