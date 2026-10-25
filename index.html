@@ -228,7 +228,7 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v2.7.2 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v2.7.3 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1293,7 +1293,7 @@ function strip(segs,st,en){
   push(1440-pos,'sO');return html+'</div>';
 }
 function kpi(lbl,val,cls='',small=''){return `<div class="kpi ${cls}"><span>${lbl}</span><b>${val}</b>${small?`<small>${small}</small>`:''}</div>`}
-function empty(){return `<div class="empty">Ainda sem dados.<br><br><button class="btn amber" onclick="document.getElementById('fileIn').click()">Carregar ficheiros .esm / .ddd</button><br><br><span class="note">Ou lê o cartão direto na aba <b>Leitor</b>, ou insere os dias à mão na aba <b>Discos</b> (discos de tacógrafo / registos em papel).</span></div>`}
+function empty(){return `<div class="empty">Ainda sem dados.<br><br><button class="btn amber" onclick="document.getElementById('fileIn').click()">Carregar ficheiros .esm / .ddd</button></div>`}
 function selMes(){
   const ms=[...new Set(ROWS.map(r=>r.iso.slice(0,7)))];
   return `<select id="fMes"><option value="">Todos os meses</option>${ms.map(m=>`<option ${fMes===m?'selected':''} value="${m}">${dPT(m+'-01').slice(3)}</option>`).join('')}</select>
@@ -1354,8 +1354,7 @@ function registos(){
     <td><input type="checkbox" class="chk eExt" data-d="${r.iso}" ${r.extra?'checked':''} aria-label="Extra"></td></tr>`).join('');
   return `<div class="row">${selMes()}</div>
   <div class="legend"><span><i style="background:var(--drive)"></i>Condução</span><span><i style="background:var(--work)"></i>Outros trabalhos</span><span><i style="background:var(--avail)"></i>Disponibilidade</span><span><i style="background:var(--s-pausa)"></i>Pausa</span></div>
-  <div class="tw"><table><tr><th>Data</th><th>Início</th><th>Fim</th><th>Total</th><th>Condução</th><th>Outros</th><th>Disp.</th><th>Espera Doc.</th><th>Pausa</th><th>KM</th><th>Dia 00–24h</th><th>Observações</th><th>Extra</th></tr>${rows}</table></div>
-  <p class="note">Total = Condução + Outros + Disponibilidade + Espera Doc. A Espera Doc. é reclassificada por ti a partir da Pausa (escreve h:mm). Observações, KM e Extra são editáveis; o resto vem do cartão.</p>`;
+  <div class="tw"><table><tr><th>Data</th><th>Início</th><th>Fim</th><th>Total</th><th>Condução</th><th>Outros</th><th>Disp.</th><th>Espera Doc.</th><th>Pausa</th><th>KM</th><th>Dia 00–24h</th><th>Observações</th><th>Extra</th></tr>${rows}</table></div>`;
 }
 
 /* ---- Leitor de cartão ---- */
@@ -1369,7 +1368,6 @@ function leitor(){
       <b>${lig?'Leitor ligado — '+esc(RD.dev.productName||'leitor de cartões'):'Nenhum leitor ligado'}</b>
       ${AND?'<span class="tag ok">APP ANDROID</span>':'<span class="tag dim">PÁGINA WEB</span>'}
     </div>
-    <p class="note" style="margin-top:8px">Liga o leitor ao telemóvel com um cabo OTG, mete o cartão de condutor com o chip para dentro e escolhe o leitor. A app só lê: nunca escreve nada no cartão.</p>
     ${lig?`<div class="row noprint">
       <button class="btn amber" id="rdLer" ${RD.busy?'disabled':''}>${RD.busy?'A ler…':'⭘ Ler cartão'}</button>
       <button class="btn" id="rdOff">Desligar</button>
@@ -1386,21 +1384,10 @@ function leitor(){
   ${RD.prog?`<div class="card" id="rdProg">
     <div class="row" style="margin:0 0 8px;justify-content:space-between"><b class="rdEtapa">${esc(RD.prog.etapa||'')}</b><span class="mono rdPct">${RD.prog.total?Math.min(100,Math.round(RD.prog.feito/RD.prog.total*100)):0}%</span></div>
     <div class="bar" style="height:14px"><i style="width:${RD.prog.total?Math.min(100,Math.round(RD.prog.feito/RD.prog.total*100)):0}%;transition:width .25s"></i></div>
-    <p class="note" style="margin-top:8px">${RD.prog.fim?'Os dias lidos juntam-se aos que já tinhas: nada do que estava guardado é apagado.':'Não tires o cartão nem o cabo até chegar aos 100%.'}</p></div>`:''}
+    <p class="note" style="margin-top:8px">${RD.prog.fim?'':'Não tires o cartão até chegar aos 100%.'}</p></div>`:''}
   <h2>Registo da leitura</h2>
   <div class="card" style="padding:10px 12px"><div id="rdLog" class="mono" style="font-size:11.5px;max-height:260px;overflow:auto;line-height:1.6">${RD.log.length?RD.log.map(l=>`<div class="${l.cls}">${esc(l.t)}</div>`).join(''):'<span class="note">Ainda sem leituras.</span>'}</div></div>
-  ${RD.bloqueado?`<div class="alert MUITO_GRAVE"><span class="g">LIMITAÇÃO DO BROWSER</span> · O Chrome bloqueia o acesso a leitores de smart card a partir de páginas web (classe USB 0x0B, protegida desde 2018 por causa de um problema de segurança com chaves U2F). Nenhum site consegue contornar isto — só uma app instalada. Vê as alternativas em baixo.<div class="lb">WebUSB — lista de classes de interface protegidas</div></div>`:''}
-  ${AND?`<h2>Estás na app instalada</h2>
-  <div class="card"><p class="note">Aqui o acesso ao leitor é feito pelo próprio Android, sem a limitação do Chrome: qualquer leitor CCID normal deve funcionar. Se algum não funcionar, manda-me o texto do registo em cima.</p></div>`
-  :`<h2>Alternativas</h2>
-  <div class="card"><p class="note">
-  <b>1.</b> Instalar esta app como app Android (o projeto está no repositório, em <b>android/</b>) — o leitor passa a funcionar.<br><br>
-  <b>2.</b> Usar uma app de leitura já feita (<b>TahoReader</b>, <b>Driver Card Reader</b>), exportar o <b>.ddd</b> e trazê-lo para aqui com <b>＋ Ficheiros</b>. A análise é a mesma.</p></div>`}
-  <h2>Notas</h2>
-  <div class="card"><p class="note">
-  · O NFC não serve: o cartão de condutor é de contactos.<br><br>
-  · A app descarrega a 1.ª geração da aplicação de tacógrafo, presente em todos os cartões, e monta um .ddd.<br><br>
-  · É uma <b>cópia de trabalho</b>: a descarga oficial dos 28 dias continua a ser feita como sempre.</p></div>`;
+  ${RD.bloqueado?`<div class="alert MUITO_GRAVE"><span class="g">LIMITAÇÃO DO BROWSER</span> · O Chrome bloqueia o acesso a leitores de smart card a partir de páginas web (classe USB 0x0B, protegida desde 2018 por causa de um problema de segurança com chaves U2F). Nenhum site consegue contornar isto — só uma app instalada. Para usar o leitor, instala a app Android.</div>`:''}`;
 }
 
 /* ---- Salário: escala, horas e valores ---- */
@@ -1430,7 +1417,7 @@ function salario(){
     <td class="t">${m.desc?hm(m.desc):'—'}</td><td class="t">${m.fer?hm(m.fer):'—'}</td>
     <td class="t">${m.not?hm(m.not):'—'}</td><td class="t">${eur(m.fixos)}</td><td class="t">${m.extraMan?eur(m.extraMan):'—'}</td>
     <td class="t"><b>${eur(m.valor)}</b></td></tr>`).join('');
-  return `<p class="note">Aqui defines como trabalhas e quanto vales à hora. A app compara cada dia dos registos com a tua escala e separa o que é normal do que é extra.</p>
+  return `
   ${vh?'':'<div class="alert GRAVE"><span class="g">FALTAM VALORES</span> · Sem ordenado base nem valor à hora, as contas dão zero. Preenche em baixo.</div>'}
   <div class="kgrid">
     ${kpi('A receber — '+(mesAtual?dPT(mesAtual.k+'-01').slice(3):'—'),mesAtual?eur(mesAtual.valor):'—','','mês em curso')}
@@ -1443,7 +1430,6 @@ function salario(){
   <h2>A minha escala</h2>
   <div class="card">
     <div class="row">${DIAS.map((d,i)=>`<label class="note"><input type="checkbox" class="cEsc" data-i="${i}" ${c.escala[i]?'checked':''}> ${d}</label>`).join('')}</div>
-    <p class="note">Marca os dias que estás obrigado a trabalhar. Um dia trabalhado fora destes conta como <b>dia de descanso trabalhado</b>, pago ao acréscimo respetivo.</p>
     <div class="row">
       ${num('horasDia','Horas normais/dia',hm(c.horasDia),'8:00')}
       ${num('horasSemana','Horas normais/semana',hm(c.horasSemana),'40:00')}
@@ -1465,7 +1451,6 @@ function salario(){
       ${num('valorHora','ou valor à hora (€)',c.valorHora||'','6.50')}
     </div>
     <div class="row"><label class="note"><input type="checkbox" data-c="normaisNoOrdenado" ${c.normaisNoOrdenado?'checked':''}> As horas normais já vêm no ordenado (só somar os extras)</label></div>
-    <p class="note">Se receberes ao mês, deixa o visto: o total mostrado é o que <b>acresce</b> ao ordenado. O divisor 173,33 é o habitual para 40h por semana.</p>
   </div>
 
   <h2>Acréscimos (%)</h2>
@@ -1477,7 +1462,6 @@ function salario(){
       ${num('acr.feriado','Feriado',c.acr.feriado,'50')}
       ${num('acr.noturno','Trabalho noturno',c.acr.noturno,'25')}
     </div>
-    <p class="note">Vêm preenchidos com os mínimos do Código do Trabalho (art. 268.º). <b>O contrato coletivo do sector costuma pagar mais</b> — confirma no teu recibo ou no CCT e corrige aqui.</p>
   </div>
 
   <h2>Valores fixos</h2>
@@ -1498,8 +1482,7 @@ function salario(){
   <div class="tw"><table><tr><th>Mês</th><th>Dias</th><th>Fora de escala</th><th>Trabalho</th><th>Normais</th><th>Extra 1.ª</th><th>Extra segs.</th><th>Descanso</th><th>Feriado</th><th>Noturnas</th><th>Fixos</th><th>Extras lançados</th><th>A receber</th></tr>${linhasMes}</table></div>
 
   <h2>Dia a dia</h2>
-  <div class="tw"><table><tr><th>Data</th><th>Tipo</th><th>Trabalho</th><th>Normais</th><th>Extra 1.ª</th><th>Extra segs.</th><th>Descanso</th><th>Feriado</th><th>Noturnas</th><th>Fixos</th><th>Extras lançados</th><th>Valor</th></tr>${linhas}</table></div>
-  <p class="note">"Descanso" e "Feriado" são as horas desses dias, pagas por inteiro ao acréscimo respetivo. As noturnas são as horas de trabalho entre ${c.noiteIni} e ${c.noiteFim} — o valor mostrado é só o acréscimo, porque essas horas já estão contadas nas outras colunas. Isto é uma estimativa para conferires o recibo, não um documento oficial.</p>`;
+  <div class="tw"><table><tr><th>Data</th><th>Tipo</th><th>Trabalho</th><th>Normais</th><th>Extra 1.ª</th><th>Extra segs.</th><th>Descanso</th><th>Feriado</th><th>Noturnas</th><th>Fixos</th><th>Extras lançados</th><th>Valor</th></tr>${linhas}</table></div>`;
 }
 
 /* ---- Conta: perfil do condutor + sincronização ---- */
@@ -1508,7 +1491,6 @@ function conta(){
   const campo=(k,lab,ph)=>`<label class="note" style="min-width:140px">${lab}<input data-p="${k}" value="${esc(P[k]||'')}" placeholder="${ph||''}"></label>`;
   const ult=N.ultima?new Date(N.ultima).toLocaleString('pt-PT').replace(',',' ·'):'nunca';
   return `<h2 style="margin-top:0">Perfil do condutor</h2>
-  <p class="note">Aparece no cabeçalho, no dossier de fiscalização e nas exportações. Serve sobretudo para os dias inseridos à mão: quando carregas um ficheiro do cartão, o nome e o número vêm de lá.</p>
   <div class="card">
     <div class="row">${campo('nome','Nome próprio')}${campo('ap','Apelido')}${campo('cartao','N.º do cartão')}</div>
     <div class="row">${campo('empresa','Empresa')}${campo('matricula','Matrícula habitual','__-__-__')}${campo('base','Base / centro operacional')}</div>
@@ -1522,7 +1504,6 @@ function conta(){
     const comNoite=ROWS.filter(r=>minNoturnos(r)>0);
     const totNoite=comNoite.reduce((s,r)=>s+minNoturnos(r),0);
     return `<h2>Horário de trabalho</h2>
-  <p class="note">A amplitude é o tempo do início ao fim do turno (porta a porta). A janela noturna é a mesma usada na aba Salário para as horas noturnas — muda num sítio e fica nos dois.</p>
   <div class="card">
     <div class="row">
       <label class="note">Amplitude máxima de trabalho (h:mm)<input id="hAmp" value="${hm(c.ampMax)}" placeholder="13:00" inputmode="numeric" style="width:110px"></label>
@@ -1535,14 +1516,13 @@ function conta(){
       ${kpi('Turnos acima de '+hm(c.ampMax),acima,acima?'warn':'ok','amplitude definida')}
       ${kpi('Turnos com trabalho noturno',comNoite.length,'',c.noiteIni+' → '+c.noiteFim)}
       ${kpi('Horas noturnas (total)',hm(totNoite),'','todo o período')}</div>
-    <p class="note">Limite legal da amplitude: até 13h o descanso diário pode ser regular; de 13h a 15h só cabe reduzido; acima de 15h é infração (Reg. 561/2006, art. 8.º/2). Se definires um valor diferente de 13:00, a aba Alertas avisa também quando o passares. Com a opção ligada, turnos com trabalho noturno e mais de 10h de trabalho ficam assinalados (Diretiva 2002/15/CE, art. 7.º).</p>
   </div>`})()}
 
   <h2>Conta e sincronização</h2>
   <div class="card">
     <div class="row" style="margin:0"><span class="sem ${nvLig()?'g':nvOk()?'y':''}"></span>
       <b>${nvLig()?'Ligado como '+esc(N.email||'(sem email)'):nvOk()?'Configurado — falta entrar':'Sincronização não configurada'}</b></div>
-    ${nvLig()?`<p class="note" style="margin-top:8px">Última sincronização: ${ult}. Os dados vivem no aparelho; a nuvem é uma cópia. Sem rede, a app trabalha na mesma.</p>
+    ${nvLig()?`<p class="note" style="margin-top:8px">Última sincronização: ${ult}</p>
       <div class="row">
         <button class="btn amber" id="nvSync" ${NV.ocupado?'disabled':''}>${NV.ocupado?'A sincronizar…':'↻ Sincronizar agora'}</button>
         <button class="btn" id="nvOut">Terminar sessão</button>
@@ -1553,7 +1533,7 @@ function conta(){
       </div>`
     :nvOk()?`<div class="row"><input id="nvEmail" placeholder="email" value="${esc(N.email||'')}"><input id="nvPass" type="password" placeholder="palavra-passe"></div>
       <div class="row"><button class="btn amber" id="nvIn">Entrar</button><button class="btn" id="nvNew">Criar conta</button><button class="btn" id="nvRec">Esqueci-me</button></div>`
-    :`<p class="note" style="margin-top:8px">Precisas de um projeto Supabase (gratuito) para guardar os dados. As instruções e o SQL estão no ficheiro <b>NUVEM.md</b> do repositório — leva cerca de dez minutos, uma vez só.</p>`}
+    :``}
     <div id="nvLog" class="note ${NV.cls||''}" style="margin-top:8px">${esc(NV.estado||'')}</div>
   </div>
 
@@ -1562,14 +1542,7 @@ function conta(){
     <div class="row"><label class="note" style="flex:1">Endereço do projeto<input id="nvUrl" value="${esc(N.url||'')}" placeholder="https://xxxx.supabase.co"></label></div>
     <div class="row"><label class="note" style="flex:1">Chave pública (anon)<input id="nvKey" value="${esc(N.key||'')}" placeholder="eyJhbGciOi..."></label></div>
     <div class="row"><button class="btn" id="nvSalvarCfg">Guardar ligação</button>${nvOk()?`<button class="btn danger" id="nvLimpaCfg">Remover ligação</button>`:''}</div>
-    <p class="note">A chave anon é pública por natureza — o que protege os dados é a regra de acesso por utilizador (RLS) que o SQL cria: cada conta só vê as suas próprias linhas e os seus próprios ficheiros.</p>
-  </div>
-
-  <h2>O que é sincronizado</h2>
-  <div class="card"><p class="note">
-  Perfil, observações, KM, esperas, dias marcados como extra, destinos, controlos, dias inseridos à mão e as preferências (fuso, limiar da bissemanal). Com a opção ligada, também os ficheiros <b>.ddd</b> do cartão.<br><br>
-  Em caso de conflito entre aparelhos, junta-se tudo: dias e notas que só existam num lado são mantidos, e nos que existirem dos dois lados fica a versão do aparelho que gravou por último.<br><br>
-  Guarda na mesma o backup JSON na aba Exportar de vez em quando. A nuvem é comodidade, não é arquivo — e o plano gratuito do Supabase não tem cópias de segurança.</p></div>`;
+  </div>`;
 }
 
 /* ---- Discos / inserção manual ---- */
@@ -1596,7 +1569,7 @@ function manual(){
     <select class="mBA" data-i="${i}">${ACTN.map((n,ai)=>`<option value="${ai}" ${+b.a===ai?'selected':''}>${n}</option>`).join('')}</select>
     <input type="time" class="mBI" data-i="${i}" value="${esc(b.ini)}"><span class="note">→</span><input type="time" class="mBF" data-i="${i}" value="${esc(b.fim)}">
     <button class="btn danger mBDel" data-i="${i}" aria-label="Remover bloco">✕</button></div>`).join('');
-  return `<p class="note">Para dias em que usaste <b>disco de tacógrafo</b> (ou outro registo em papel) e não há dados no cartão. Os dias inseridos aqui entram em <b>todas</b> as análises — jornada, Lei 84, bissemanais, descansos, alertas e fiscalização — tal como os dias lidos do cartão. As horas são na hora local selecionada no cabeçalho (${S.tz==='utc'?'UTC':'Portugal'}).</p>
+  return `
   <h2>${S.man[D.d]?'Editar dia '+dPT(D.d):'Novo dia'}</h2>
   <div class="card">
     <div class="row">
@@ -1613,7 +1586,6 @@ function manual(){
       ${D.modo!=='blk'&&jo?`<span class="chip" style="${somaT>jo?'color:var(--bad)':''}">Pausa ${hm(Math.max(jo-somaT,0))}</span>`:''}
     </div>
     ${D.modo==='blk'?`
-      <p class="note">Cada bloco é um troço do dia lido no disco (ex.: condução 06:00→09:30). O tempo que sobrar dentro do turno conta como pausa. Com blocos, a app verifica também as pausas do art. 7.º.</p>
       ${blocos}
       <div class="row"><button class="btn" id="mAddB">＋ Bloco</button></div>`
     :`
@@ -1621,8 +1593,7 @@ function manual(){
         <label class="note">Condução <input class="mini" data-m="cond" value="${esc(D.cond)}" placeholder="0:00"></label>
         <label class="note">Outros trab. <input class="mini" data-m="ot" value="${esc(D.ot)}" placeholder="0:00"></label>
         <label class="note">Disponibilidade <input class="mini" data-m="disp" value="${esc(D.disp)}" placeholder="0:00"></label>
-      </div>
-      <p class="note">O resto da jornada é contado como pausa. Sem os horários exatos das pausas, este dia não é avaliado quanto à regra das 4h30 de condução contínua (art. 7.º) — usa o modo <b>Blocos</b> se quiseres essa verificação.</p>`}
+      </div>`}
     <div class="row">
       <label class="note">KM <input class="mini" data-m="km" value="${esc(D.km)}" placeholder="0"></label>
       <label class="note">Observações <input class="obs" data-m="obs" value="${esc(D.obs)}" placeholder="destino / notas"></label>
@@ -1674,7 +1645,7 @@ function lei84(){
     <td class="t">${hm(p.margem)}</td><td class="t">${hm(p.trab)}</td><td class="t">${hm(p.jorn)}</td>
     <td>${p.fecho?`<span class="tag ok">${hm(p.fecho.dur)}</span><div class="note">${dPT(p.fecho.iso)}</div>`:'<span class="tag dim">—</span>'}</td>
     <td><span class="tag ${p.cond>90*60?'bad':p.cond>=0.8*90*60?'warn':'ok'}">${p.cond>90*60?'> 90h':p.cond>=0.8*90*60?'≥ 80%':'OK'}</span></td></tr>`).join('');
-  return `<p class="note">Art. 21.º do DL 84/2026: máx. <b>60h de trabalho/semana</b> e <b>média de 48h em 4 meses</b>. Trabalho = Condução + Outros Trabalhos + Disponibilidade. Condução bissemanal ≤ 90h (Reg. 561/2006, art. 6.º/3).</p>
+  return `
   <div class="kgrid">
     ${kpi('Semana atual '+dPT(cur.k).slice(0,5)+'–'+dPT(cur.kEnd).slice(0,5),hm(cur.trab),cur.trab>60*60?'bad':cur.trab>=48*60?'warn':'ok')}
     ${kpi('Margem até 60h',hm(cur.margem),cur.margem<5*60?'bad':cur.margem<12*60?'warn':'ok')}
@@ -1693,10 +1664,8 @@ function lei84(){
   <div class="row noprint"><label class="note">Descanso que fecha a bissemanal:</label>
     <select id="bisLim"><option value="2700" ${LIMB===2700?'selected':''}>≥ 45:00</option><option value="2701" ${LIMB===2701?'selected':''}>&gt; 45:00 (45:01)</option></select></div>
   <div class="tw"><table><tr><th>#</th><th>Início</th><th>Fim</th><th>Dias trab.</th><th>Dias corridos</th><th>Condução</th><th>Margem 90h</th><th>Trabalho</th><th>Jornada</th><th>Fechado por</th><th>Estado</th></tr>${prows}</table></div>
-  <p class="note">A contagem bissemanal <b>reinicia sempre que existe um descanso de ${hm(LIMB)} ou mais</b>: esse descanso fecha o período anterior e o período novo começa no turno seguinte. O último período fica <b>em curso</b> até surgir o próximo descanso ≥ ${hm(LIMB)}. Se um período passar dos 14 dias corridos, é sinalizado (o descanso semanal deve iniciar-se no máx. 6×24h após o fim do anterior — art. 8.º/6).</p>
   <h2>Tabela semanal — média e bissemanal</h2>
-  <div class="tw"><table><tr><th>Início</th><th>Fim</th><th>Dias</th><th>Trabalho</th><th>Jornada</th><th>Média 4m</th><th>Margem 60h</th><th>Estado</th><th>Média</th><th>Condução</th><th>Bissem. #</th><th>Acum. bissem.</th><th>Cond. bissem.</th></tr>${rows}</table></div>
-  <p class="note">Nas colunas bissemanais, cada semana mostra o acumulado do período em curso <b>até ao fim dessa semana</b> (e não a soma de duas semanas civis). "REINÍCIO" marca as semanas em que um descanso ≥ ${hm(LIMB)} abriu um novo período.</p>`;
+  <div class="tw"><table><tr><th>Início</th><th>Fim</th><th>Dias</th><th>Trabalho</th><th>Jornada</th><th>Média 4m</th><th>Margem 60h</th><th>Estado</th><th>Média</th><th>Condução</th><th>Bissem. #</th><th>Acum. bissem.</th><th>Cond. bissem.</th></tr>${rows}</table></div>`;
 }
 
 /* ---- Descansos ---- */
@@ -1722,13 +1691,6 @@ function descansos(){
     ${kpi('Reduzidos desde o semanal',last.red,last.red>3?'bad':last.red===3?'warn':'ok','máx. 3')}
     ${kpi('Jornadas > 13h',longas,longas?'warn':'ok','já não cabem 11h nas 24h')}
     ${kpi('Fora das 24h',fora,fora?'bad':'ok','nem 9h couberam')}</div>
-  <p class="note"><b>Como é calculado.</b> O período de 24 horas conta a partir do fim do descanso anterior, ou seja, do início do turno. O descanso diário tem de estar <b>completo dentro dessas 24 horas</b> (art. 8.º/2). Daí sai tudo o resto:<br><br>
-  · Jornada até <b>13h</b> → sobram 11h ou mais nas 24h → <b>DIÁRIO REGULAR</b>.<br>
-  · Jornada entre <b>13h e 15h</b> → já só cabem 9h a 11h → <b>DIÁRIO REDUZIDO</b> (máx. 3 entre dois descansos semanais, art. 8.º/4).<br>
-  · Jornada acima de <b>15h</b> → nem um descanso reduzido cabe → <b>infração</b>.<br>
-  · <b>FRACIONADO</b>: uma pausa de 3h ou mais dentro do turno mais 9h seguidas a seguir contam como descanso regular (art. 4.º, alínea g). Em dias inseridos à mão no modo <b>Totais</b> não se sabe onde ficou a pausa, por isso fica marcado <b>PAUSA POR CONFIRMAR</b> e conta como reduzido — passa esse dia a modo <b>Blocos</b> para valer como regular.<br><br>
-  A coluna "Dentro das 24h" mostra a parte do descanso que caiu dentro da janela — é essa que decide, não a duração total. Um descanso longo que comece tarde de mais continua a ser insuficiente.<br><br>
-  Descansos semanais: ≥24h REDUZIDO · ≥45h REGULAR. Compensação do semanal reduzido até ao fim da 3.ª semana seguinte (art. 8.º/6), agregada a outro descanso ≥ 9h. Regra 144h: novo descanso semanal ≤ 6×24h após o fim do anterior. Um descanso de ${hm(S.bisLim||45*60)} ou mais <b>fecha o período bissemanal</b> (ver aba Lei 84). O repouso semanal regular não pode ser gozado no veículo; regresso a casa/base a cada 4 semanas.</p>
   <div class="tw"><table><tr><th>Data</th><th>Fim do turno</th><th>Início seguinte</th><th>Jornada</th><th>Fim das 24h</th><th>Dentro das 24h</th><th>Descanso total</th><th>Status</th><th>Red.</th><th>Regra máx. 3</th><th>Falta (45h)</th><th>Compensação</th></tr>${rows}</table></div>`;
 }
 
@@ -1739,7 +1701,7 @@ function destinos(){
     return {nome,kw,dias:rs.length,h:rs.reduce((s,r)=>s+r.jornada,0),c:rs.reduce((s,r)=>s+r.cond,0),km:rs.reduce((s,r)=>s+r.km,0)};
   });
   const rows=agg.map((a,i)=>`<tr><td>${esc(a.nome)}</td><td class="note">${esc(a.kw)}</td><td class="t">${a.dias}</td><td class="t">${hm(a.h)}</td><td class="t">${hm(a.c)}</td><td class="t">${a.km}</td><td class="t">${a.dias?Math.round(a.km/a.dias):0}</td><td><button class="btn danger dDel" data-i="${i}" aria-label="Remover">✕</button></td></tr>`).join('');
-  return `<p class="note">Conta os dias cujas Observações contêm a palavra-chave.</p>
+  return `
   <div class="tw"><table><tr><th>Destino</th><th>Palavra-chave</th><th>Dias</th><th>Horas</th><th>Condução</th><th>KM</th><th>KM/dia</th><th></th></tr>${rows}</table></div>
   <div class="row"><input id="dNome" placeholder="Destino"><input id="dKw" placeholder="palavra-chave"><button class="btn amber" id="dAdd">Adicionar destino</button></div>`;
 }
@@ -1763,7 +1725,6 @@ function extras(){
     <td><select class="xP" data-d="${x.iso}"><option ${x.pago==='Sim'?'selected':''}>Sim</option><option ${x.pago!=='Sim'?'selected':''}>Não</option></select></td>
     <td><input class="obs xN" data-d="${x.iso}" value="${esc(x.notas)}" placeholder="notas"></td></tr>`).join('');
   return `<div class="kgrid">${kpi('Total registado',tot.toFixed(2)+' €')}${kpi('Por receber',por.toFixed(2)+' €',por?'warn':'ok')}${kpi('Recebido',(tot-por).toFixed(2)+' €','ok')}${kpi('Dias extra',X.length)}</div>
-  <p class="note">Automático: aparece cada dia com Extra = SIM (nos Registos) ou trabalhado a sábado, domingo ou feriado. O Tipo é sugerido pelo dia; valores e estado de pagamento são teus.</p>
   <div class="tw"><table><tr><th>Data</th><th>Dia</th><th>Tipo</th><th>Observações</th><th>Horas</th><th>KM</th><th>Valor (€)</th><th>Pago?</th><th>Notas</th></tr>${rows}</table></div>`;
 }
 
@@ -1840,7 +1801,6 @@ function fisc(){
   ${dias.filter(x=>x.al.length).map(diaLinha).join('')}</table></div>
   <p class="note">${dias.filter(x=>x.al.length).length} de ${dias.length} dias com achados; os restantes estão em conformidade.</p>`
   :`<div class="empty">Nenhum dia em incumprimento nos ${dias.length} dias da janela. 🟢</div>`}
-  <p class="note">Sugestão para achados: regularizar o padrão em causa nas semanas seguintes e anotar a justificação no verso do registo, quando aplicável (art. 12.º do Reg. 561/2006).</p>
   <h2>Semanas com achados na janela</h2>
   ${wksWin.length?wksWin.map(k=>{const w=WEEKS.find(w=>w.k===k);
     return `<div class="card"><b>Semana ${dPT(k)} – ${dPT(w.kEnd)}</b>
@@ -2091,16 +2051,16 @@ async function exportaRelJornada(){
 
 /* ---- Exportar ---- */
 function exportar(){
-  return `<div class="card"><h2 style="margin-top:0">Relatório de jornada</h2><p class="note">No formato do teu Excel, com as folhas <b>DADOS</b>, <b>JORNADA TOTAL</b>, <b>DL 84 2026</b>, <b>DESCANSOS</b> e <b>EXTRAS</b>. Escolhe o mês ou todo o período; vê no ecrã, imprime / guarda em PDF (uma folha ou todas) ou descarrega o Excel com as 5 folhas formatadas.</p><br>
+  return `<div class="card"><h2 style="margin-top:0">Relatório de jornada</h2>
   <div class="row"><button class="btn amber" id="exRelJ">📄 Abrir relatório de jornada</button></div></div>
   <div class="grid2">
-  <div class="card"><h2 style="margin-top:0">Excel (formato da aba DADOS)</h2><p class="note">Mesmas colunas e ordem do livro modelo. Precisa de internet na 1.ª vez (biblioteca).</p><br><button class="btn amber" id="exXlsx">⇩ Exportar .xlsx</button></div>
-  <div class="card"><h2 style="margin-top:0">CSV</h2><p class="note">Tabela DADOS em CSV (compatível com Excel).</p><br><button class="btn" id="exCsv">⇩ Exportar .csv</button></div>
-  <div class="card"><h2 style="margin-top:0">PDF</h2><p class="note">Dossier de fiscalização pronto a imprimir/guardar como PDF.</p><br><button class="btn" id="exPdf">🖨 Gerar dossier</button></div>
-  <div class="card"><h2 style="margin-top:0">JSON — backup das notas</h2><p class="note">Observações, espera doc., extras, destinos, controlos e <b>dias inseridos à mão (discos)</b>. Faz este backup com regularidade: os dias manuais só existem neste dispositivo. <b>Restaurar junta</b> o backup ao que já tens — não apaga nada.</p><br>
+  <div class="card"><h2 style="margin-top:0">Excel (formato da aba DADOS)</h2><button class="btn amber" id="exXlsx">⇩ Exportar .xlsx</button></div>
+  <div class="card"><h2 style="margin-top:0">CSV</h2><button class="btn" id="exCsv">⇩ Exportar .csv</button></div>
+  <div class="card"><h2 style="margin-top:0">PDF</h2><button class="btn" id="exPdf">🖨 Gerar dossier</button></div>
+  <div class="card"><h2 style="margin-top:0">JSON — backup das notas</h2>
   <div class="row"><button class="btn" id="exJson">⇩ Backup</button><button class="btn" id="imJson">⇪ Restaurar</button><input type="file" id="jsonIn" accept=".json" hidden></div></div>
   </div>
-  <div class="card"><h2 style="margin-top:0">Repor</h2><p class="note">Apaga as notas e os dias inseridos à mão neste dispositivo (os ficheiros do cartão não são afetados). Exporta o backup JSON antes.</p><br><button class="btn danger" id="exWipe">Apagar notas manuais</button></div>`;
+  <div class="card"><h2 style="margin-top:0">Repor</h2><button class="btn danger" id="exWipe">Apagar notas manuais</button></div>`;
 }
 
 /* ============ EVENTOS / EXPORTS ============ */
