@@ -178,24 +178,31 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
   .rj td.txt{min-width:0}.rj table.rj-dados td:nth-child(12){min-width:0}
   .rj td{white-space:nowrap}.rj td.txt{white-space:normal}.rj th{white-space:normal}
 }
-/* ---- telemóvel / ecrãs estreitos: barra lateral passa a barra de topo ---- */
+/* ---- ecrãs estreitos: a barra lateral fica como coluna estreita (ícone + nome) ---- */
 @media(max-width:980px){
-  .app{flex-direction:column}
-  .side{width:100%;height:auto;position:sticky;top:0;z-index:30;flex-direction:row;align-items:center;gap:6px;padding:8px 10px;overflow:visible}
-  .brand{padding:0 6px 0 0}
-  .brand-sub,.brand-name,.side .roadline,.side-foot{display:none}
-  h2{font-size:17px}
-  .brand-mark{width:32px;height:32px}
-  #tabs{flex-direction:row;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
-  #tabs::-webkit-scrollbar{display:none}
-  .nav-item{padding:8px 10px;font-size:13px}
-  .nav-item.on::before{left:8px;right:8px;top:auto;bottom:2px;width:auto;height:3px;background:repeating-linear-gradient(90deg,var(--amber) 0 6px,transparent 6px 10px)}
+  .side{width:76px;padding:12px 6px;align-items:stretch}
+  .brand{justify-content:center;padding:2px 0 12px}
+  .brand-mark{width:38px;height:38px}
+  .brand-name,.brand-sub,.side-foot{display:none}
+  .side .roadline{margin:0 6px 10px;background:repeating-linear-gradient(90deg,var(--amber) 0 8px,transparent 8px 14px)}
+  #tabs{gap:1px}
+  .nav-item{flex-direction:column;gap:3px;padding:8px 2px 7px;font-size:10px;line-height:1.15;text-align:center;justify-content:center;white-space:normal;letter-spacing:.01em}
+  .nav-item svg{width:19px;height:19px}
+  .nav-item.on::before{left:0;top:9px;bottom:9px}
   .top{padding:14px 14px 10px}
   h1{font-size:24px}
-  main{padding:14px 14px 30px}
-  footer{margin:10px 14px 70px}
-  .kgrid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+  h2{font-size:17px}
+  main{padding:14px 12px 30px}
+  footer{margin:10px 12px 70px}
+  .kgrid{grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:10px}
+  .kpi{padding:12px 12px}
   .kpi b{font-size:24px}
+  .top-ctrl select{max-width:150px}
+}
+@media(max-width:420px){
+  .side{width:66px;padding:10px 4px}
+  .nav-item{font-size:9.5px}
+  .kpi span{font-size:10.5px;letter-spacing:.05em}
 }
 @media print{
   body{background:#fff;color:#000;padding:0}
@@ -221,7 +228,7 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v2.7 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v2.7.1 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -241,7 +248,7 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
 <div class="roadline wide"></div>
 <main id="main"></main>
 <footer>
-  <span class="mono" style="display:block;margin-bottom:4px;color:var(--faint)">v2.7 — novo visual CAL LOG (barra lateral, modo claro/escuro) · v2.6 — relatório com as folhas DADOS, JORNADA TOTAL, DL 84 2026, DESCANSOS e EXTRAS (ecrã, PDF e Excel) · v2.5 — leitor de cartão lê o histórico completo (corrige buffer circular) com barra de progresso; restaurar backup junta em vez de substituir · v2.4 — relatório de jornada no padrão da folha JORNADA TOTAL (ecrã, PDF e Excel formatado) · v2.3 — aba Conta: amplitude de trabalho e janela noturna; extensões a 10h contam dias com condução &gt; 9h; escala, horas extra e valores a receber; perfil e sincronização; descansos pela lógica das 24h; leitor USB nativo na app Android; bissemanal reinicia após descanso ≥ 45h; inserção manual (discos)</span>
+  <span class="mono" style="display:block;margin-bottom:4px;color:var(--faint)">v2.7.1 — barra lateral também no telemóvel · v2.7 — novo visual CAL LOG (barra lateral, modo claro/escuro) · v2.6 — relatório com as folhas DADOS, JORNADA TOTAL, DL 84 2026, DESCANSOS e EXTRAS (ecrã, PDF e Excel) · v2.5 — leitor de cartão lê o histórico completo (corrige buffer circular) com barra de progresso; restaurar backup junta em vez de substituir · v2.4 — relatório de jornada no padrão da folha JORNADA TOTAL (ecrã, PDF e Excel formatado) · v2.3 — aba Conta: amplitude de trabalho e janela noturna; extensões a 10h contam dias com condução &gt; 9h; escala, horas extra e valores a receber; perfil e sincronização; descansos pela lógica das 24h; leitor USB nativo na app Android; bissemanal reinicia após descanso ≥ 45h; inserção manual (discos)</span>
   <span>Os dados nunca saem deste dispositivo. Esta aplicação é uma ferramenta pessoal de apoio: não substitui os registos oficiais do tacógrafo nem aconselhamento jurídico. Reg. (CE) 561/2006 · DL 84/2026.</span>
 </footer>
 </div>
@@ -1271,7 +1278,6 @@ let TAB='painel',fMes='',fSem='';
 function nav(){
   $('#tabs').innerHTML=TABS.map(t=>`<button data-t="${t[0]}" class="nav-item ${TAB===t[0]?'on':''}" ${TAB===t[0]?'aria-current="page"':''}>${ico(t[0])}<span>${t[1]}</span></button>`).join('');
   $('#tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{TAB=b.dataset.t;render();scrollTo(0,0)});
-  const at=$('#tabs .on');if(at&&innerWidth<=980)at.scrollIntoView({block:'nearest',inline:'center'});
   const tt=TABS.find(t=>t[0]===TAB);
   $('#pgTitle').textContent=tt?tt[1]:TAB==='reljornada'?'Relatório de jornada':'';
 }
