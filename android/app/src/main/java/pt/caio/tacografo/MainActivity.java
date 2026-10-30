@@ -23,6 +23,7 @@ import android.provider.MediaStore;
 import android.util.Base64;
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.provider.Settings;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
@@ -203,11 +204,32 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
         super.onRequestPermissionsResult(req, perms, res);
-        if (req != REQ_PERM_CAM || pedidoCam == null) return;
-        if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED)
-            pedidoCam.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
-        else pedidoCam.deny();
-        pedidoCam = null;
+        if (req != REQ_PERM_CAM) return;
+        getSharedPreferences("app", MODE_PRIVATE).edit().putBoolean("camPedida", true).apply();
+        if (pedidoCam != null) {
+            if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED)
+                pedidoCam.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
+            else pedidoCam.deny();
+            pedidoCam = null;
+        }
+        avisaCamara();
+    }
+
+    /* estado da permissão da câmara: concedida · porPedir · negada (pode pedir outra vez) · bloqueada (só nas definições) */
+    String estadoCam() {
+        if (temCamara()) return "concedida";
+        if (!getSharedPreferences("app", MODE_PRIVATE).getBoolean("camPedida", false)) return "porPedir";
+        return shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) ? "negada" : "bloqueada";
+    }
+
+    void avisaCamara() {
+        if (web != null) web.evaluateJavascript("window.camPermResultado&&window.camPermResultado('" + estadoCam() + "')", null);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        avisaCamara(); // ao voltar das definições do Android, a página fica a saber se a câmara foi autorizada
     }
 
     @android.annotation.SuppressLint({"MissingSuperCall", "GestureBackNavigation"})
@@ -368,6 +390,27 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 return "Não consegui guardar o ficheiro: " + e.getMessage();
             }
+        }
+
+        /* Permissão da câmara pedida a partir da página. */
+        @JavascriptInterface
+        public String estadoCamara() { return estadoCam(); }
+
+        @JavascriptInterface
+        public void pedirCamara() {
+            runOnUiThread(() -> {
+                if (temCamara()) { avisaCamara(); return; }
+                requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_PERM_CAM);
+            });
+        }
+
+        @JavascriptInterface
+        public void abrirDefinicoes() {
+            runOnUiThread(() -> {
+                try {
+                    startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", getPackageName(), null)));
+                } catch (Exception e) { }
+            });
         }
 
         /* Mês da próxima foto tirada com a câmara (subpasta AAAA-MM). */

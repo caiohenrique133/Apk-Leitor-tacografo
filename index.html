@@ -166,6 +166,13 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
 .fv-img.zoom{overflow:auto;align-items:flex-start;justify-content:flex-start;cursor:zoom-out}
 .fv-img.zoom img{max-width:none;max-height:none}
 @media(max-width:980px){.fgrid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}}
+/* ---- permissão da câmara ---- */
+.camperm{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%;padding:10px 12px;border:1px dashed var(--amber);border-radius:9px;background:var(--warn-bg)}
+.camperm-t{font-weight:600}
+.camperm .note{flex-basis:100%}
+.camok{color:var(--ok)}
+.cam-b2{background:rgba(0,0,0,.45);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:8px;padding:10px 14px;font-weight:600}
+.cam-msg small{font-size:13px;color:#d6dbe0}
 /* ---- câmara integrada ---- */
 .camv{position:fixed;inset:0;z-index:10001;background:#000;color:#fff;overflow:hidden;touch-action:none}
 .camv[hidden]{display:none}
@@ -178,6 +185,7 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
 @keyframes camFlash{from{opacity:.85}to{opacity:0}}
 .cam-top{position:absolute;top:0;left:0;right:0;display:flex;gap:8px;align-items:center;padding:max(12px,env(safe-area-inset-top)) 12px 12px;background:linear-gradient(rgba(0,0,0,.65),transparent)}
 .cam-b{width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.45);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.28)}
+.cam-b[hidden]{display:none}
 .cam-b[aria-pressed="true"]{background:var(--amber);color:#15191E;border-color:var(--amber)}
 .cam-data{font-family:var(--cond);font-weight:600;font-size:19px;letter-spacing:.05em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,.6)}
 .cam-sp{flex:1}
@@ -280,7 +288,7 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v2.9 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v2.9.1 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1677,6 +1685,7 @@ function fotosHTML(){
       <input type="file" id="fCamIn" accept="image/*" capture="environment" hidden>
       <input type="file" id="fGalIn" accept="image/*" multiple hidden>
     </div>
+    <div class="row">${camPermHTML()}</div>
     ${FMSG?`<div class="note" style="margin-top:4px">${esc(FMSG)}</div>`:''}
   </div>
   <h2>Pasta de fotos (${FOTOS.length})</h2>
@@ -1726,6 +1735,8 @@ document.addEventListener('keydown',e=>{if(!FV.id)return;if(e.key==='Escape')fot
   const i=FOTOS.findIndex(f=>f.id===FV.id);if(e.key==='ArrowLeft'&&i>0)fotoAbre(FOTOS[i-1].id);if(e.key==='ArrowRight'&&i<FOTOS.length-1)fotoAbre(FOTOS[i+1].id)});
 function fotosBind(){
   const fd=$('#fData');if(!fd)return;
+  camPermAtualiza();
+  const fp=$('#fPerm');if(fp)fp.onclick=camPedePermissao;
   fd.onchange=e=>{FDATA=e.target.value};
   $('#fCam').onclick=()=>{FDATA=fd.value||hojeLocal();if(camDisponivel())camAbre();else camFallback()};
   $('#fGal').onclick=()=>{FDATA=fd.value||hojeLocal();$('#fGalIn').click()};
@@ -1754,6 +1765,45 @@ async function fotoGuardaBlob(blob,iso,origem){
   if(AND&&AND.guardarFoto){try{meta.noAparelho=/^Guardado/.test(AND.guardarFoto(meta.nome,iso.slice(0,7),await blobB64(img.b)))}catch(e){}}
   await FDB.put(meta,img.b);
   return meta;
+}
+/* ---- permissão da câmara ---- */
+let CAMPERM=''; // concedida · porPedir · negada · bloqueada · '' (desconhecido)
+async function camPermLe(){
+  if(AND&&AND.estadoCamara){try{return AND.estadoCamara()}catch(e){}}
+  try{const r=await navigator.permissions.query({name:'camera'});return r.state==='granted'?'concedida':r.state==='denied'?'bloqueada':'porPedir'}catch(e){return ''}
+}
+async function camPermAtualiza(){const e=await camPermLe();if(e!==CAMPERM){CAMPERM=e;if(TAB==='manual')render()}}
+window.camPermResultado=e=>{
+  const antes=CAMPERM;CAMPERM=e;
+  if(e==='concedida'&&antes&&antes!=='concedida')FMSG='Câmara autorizada.';
+  const cv=$('#camView'),aberta=cv&&!cv.hidden;
+  if(aberta&&e==='concedida'&&!CAM.stream)camLiga();
+  else if(aberta&&!CAM.stream)camSemAcesso();
+  else if(TAB==='manual')render();
+};
+async function camPedePermissao(){
+  if(AND&&AND.pedirCamara){if(CAMPERM==='bloqueada'&&AND.abrirDefinicoes)AND.abrirDefinicoes();else AND.pedirCamara();return}
+  if(!camDisponivel()){FMSG='Este browser não dá acesso à câmara.';render();return}
+  try{const st=await navigator.mediaDevices.getUserMedia({video:true});st.getTracks().forEach(t=>t.stop());CAMPERM='concedida';FMSG='Câmara autorizada.'}
+  catch(e){CAMPERM='bloqueada'}
+  const cv=$('#camView');if(cv&&!cv.hidden){if(CAMPERM==='concedida')camLiga();else camSemAcesso()}else if(TAB==='manual')render();
+}
+const camDicaBloq=()=>AND&&AND.abrirDefinicoes?'Abre as definições, toca em <b>Permissões › Câmara › Permitir</b> e volta à app.':'No Chrome: toca no <b>cadeado</b> ao lado do endereço › <b>Permissões</b> › <b>Câmara</b> › <b>Permitir</b> e recarrega a página.';
+function camPermHTML(){
+  if(CAMPERM==='concedida')return '<span class="chip camok">✅ Câmara autorizada</span>';
+  const bloq=CAMPERM==='bloqueada';
+  return `<div class="camperm"><span class="camperm-t">🔒 Câmara ${bloq?'bloqueada':'ainda sem autorização'}</span>
+    <button class="btn amber" id="fPerm">${bloq&&AND&&AND.abrirDefinicoes?'⚙ Abrir definições da app':'🔓 Pedir permissão da câmara'}</button>
+    ${bloq?`<span class="note">${camDicaBloq()}</span>`:''}</div>`;
+}
+function camSemAcesso(){
+  const msg=$('#camMsg');if(!msg)return;const bloq=CAMPERM==='bloqueada';
+  msg.innerHTML=`🔒 Sem acesso à câmara.<br><br>
+    <button class="cam-ok" id="camPerm">${bloq&&AND&&AND.abrirDefinicoes?'⚙ Abrir definições':'🔓 Pedir permissão'}</button><br><br>
+    ${bloq?`<small>${camDicaBloq()}</small><br><br>`:''}
+    <button class="cam-b2" id="camAlt">Usar a câmara do telemóvel</button>`;
+  $('#camPerm').onclick=camPedePermissao;
+  $('#camAlt').onclick=()=>{camFecha();camFallback()};
 }
 function camFallback(){try{if(AND&&AND.pastaFoto)AND.pastaFoto((FDATA||hojeLocal()).slice(0,7))}catch(e){}const i=$('#fCamIn');if(i)i.click()}
 async function camAbre(){
@@ -1793,10 +1843,12 @@ async function camLiga(){
     CAM.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:CAM.facing},width:{ideal:3840},height:{ideal:2160}}});
   }catch(e){
     if(!$('#camView')||$('#camView').hidden)return;
-    msg.innerHTML=`Sem acesso à câmara${e&&e.name==='NotAllowedError'?' — autoriza a câmara nas definições da app ou do browser':''}.<br><br><button class="cam-ok" id="camAlt">Usar a câmara do telemóvel</button>`;
-    $('#camAlt').onclick=()=>{camFecha();camFallback()};return;
+    CAMPERM=await camPermLe();
+    if(e&&e.name==='NotAllowedError'&&(CAMPERM==='concedida'||!CAMPERM))CAMPERM='bloqueada';
+    camSemAcesso();return;
   }
   if(!$('#camView')||$('#camView').hidden){camPara();return}
+  CAMPERM='concedida';
   const v=$('#camVid');v.srcObject=CAM.stream;try{await v.play()}catch(e){}
   CAM.track=CAM.stream.getVideoTracks()[0];
   const cap=CAM.track.getCapabilities?CAM.track.getCapabilities():{};
