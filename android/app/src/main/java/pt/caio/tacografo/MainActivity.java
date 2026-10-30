@@ -21,7 +21,10 @@ import android.print.PrintAttributes;
 import android.print.PrintManager;
 import android.provider.MediaStore;
 import android.util.Base64;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -54,6 +57,8 @@ public class MainActivity extends Activity {
     static final String ACTION_PERM = "pt.caio.tacografo.USB_PERMISSION";
     static final int REQ_FILE = 41;
     static final int REQ_CAM = 42;
+    static final int REQ_PERM_CAM = 43;
+    PermissionRequest pedidoCam;
     static final String PASTA_FOTOS = "Discos Tacografo";
 
     WebView web;
@@ -73,7 +78,7 @@ public class MainActivity extends Activity {
         s.setDatabaseEnabled(true);
         s.setAllowFileAccess(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        s.setMediaPlaybackRequiresUserGesture(true);
+        s.setMediaPlaybackRequiresUserGesture(false); // pré-visualização da câmara dentro da app
 
         web.addJavascriptInterface(new UsbPonte(), "AndroidUsb");
 
@@ -92,6 +97,24 @@ public class MainActivity extends Activity {
         });
 
         web.setWebChromeClient(new WebChromeClient() {
+            // câmara integrada: a página pede a câmara (getUserMedia) e a app autoriza só o seu próprio site
+            @Override
+            public void onPermissionRequest(final PermissionRequest req) {
+                runOnUiThread(() -> {
+                    boolean video = false;
+                    for (String r : req.getResources()) if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r)) video = true;
+                    if (!video || req.getOrigin() == null || !HOST.equals(req.getOrigin().getHost())) { req.deny(); return; }
+                    if (temCamara()) { req.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE}); return; }
+                    if (pedidoCam != null) pedidoCam.deny();
+                    pedidoCam = req;
+                    requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_PERM_CAM);
+                });
+            }
+            @Override
+            public void onPermissionRequestCanceled(PermissionRequest req) {
+                if (pedidoCam == req) pedidoCam = null;
+            }
+
             @Override
             public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (fileCb != null) fileCb.onReceiveValue(null);
@@ -128,6 +151,7 @@ public class MainActivity extends Activity {
 
     boolean abreCamara() {
         if (Build.VERSION.SDK_INT < 29) return false; // nos Android antigos fica a galeria
+        if (!temCamara()) { requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_PERM_CAM); return false; }
         try {
             String nome = "disco_" + new SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(new Date()) + ".jpg";
             ContentValues v = new ContentValues();
@@ -172,9 +196,28 @@ public class MainActivity extends Activity {
         fileCb = null;
     }
 
+    boolean temCamara() {
+        return checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
+        super.onRequestPermissionsResult(req, perms, res);
+        if (req != REQ_PERM_CAM || pedidoCam == null) return;
+        if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED)
+            pedidoCam.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
+        else pedidoCam.deny();
+        pedidoCam = null;
+    }
+
+    @android.annotation.SuppressLint({"MissingSuperCall", "GestureBackNavigation"})
     @Override
     public void onBackPressed() {
-        if (web.canGoBack()) web.goBack(); else super.onBackPressed();
+        // o botão "voltar" fecha primeiro a câmara / visualizador da página
+        web.evaluateJavascript("window.voltarApp?window.voltarApp():false", v -> {
+            if ("true".equals(v)) return;
+            if (web.canGoBack()) web.goBack(); else finish();
+        });
     }
 
     /* ============ Ponte para a página: window.AndroidUsb ============ */

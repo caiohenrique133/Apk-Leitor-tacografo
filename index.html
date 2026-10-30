@@ -166,6 +166,33 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
 .fv-img.zoom{overflow:auto;align-items:flex-start;justify-content:flex-start;cursor:zoom-out}
 .fv-img.zoom img{max-width:none;max-height:none}
 @media(max-width:980px){.fgrid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}}
+/* ---- câmara integrada ---- */
+.camv{position:fixed;inset:0;z-index:10001;background:#000;color:#fff;overflow:hidden;touch-action:none}
+.camv[hidden]{display:none}
+.camv video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+.cam-guia{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;padding-bottom:56px}
+.cam-guia div{width:min(84vw,calc(100vh - 260px),640px);aspect-ratio:1;border-radius:50%;border:3px dashed var(--amber);box-shadow:0 0 0 9999px rgba(0,0,0,.42)}
+.cam-guia.livre div{border:2px solid rgba(255,255,255,.35);border-radius:14px;box-shadow:none;width:calc(100vw - 24px);height:calc(100vh - 220px);aspect-ratio:auto}
+.cam-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.cam-flash.on{animation:camFlash .28s ease-out}
+@keyframes camFlash{from{opacity:.85}to{opacity:0}}
+.cam-top{position:absolute;top:0;left:0;right:0;display:flex;gap:8px;align-items:center;padding:max(12px,env(safe-area-inset-top)) 12px 12px;background:linear-gradient(rgba(0,0,0,.65),transparent)}
+.cam-b{width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.45);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.28)}
+.cam-b[aria-pressed="true"]{background:var(--amber);color:#15191E;border-color:var(--amber)}
+.cam-data{font-family:var(--cond);font-weight:600;font-size:19px;letter-spacing:.05em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.cam-sp{flex:1}
+.cam-msg{position:absolute;left:0;right:0;top:42%;text-align:center;padding:0 28px;font-size:15px;text-shadow:0 1px 4px rgba(0,0,0,.7)}
+.cam-msg:empty{display:none}
+.cam-bot{position:absolute;bottom:0;left:0;right:0;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding:18px 22px max(22px,env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.75))}
+.cam-disp{width:78px;height:78px;border-radius:50%;border:4px solid #fff;display:flex;align-items:center;justify-content:center}
+.cam-disp i{width:62px;height:62px;border-radius:50%;background:var(--amber);transition:transform .1s}
+.cam-disp:active i{transform:scale(.88)}
+.cam-disp:disabled{opacity:.45}
+.cam-thumb{justify-self:start;width:56px;height:56px;border-radius:11px;border:2px solid #fff;background:#222 center/cover no-repeat;position:relative}
+.cam-thumb:disabled{opacity:.35}
+.cam-thumb span{position:absolute;top:-8px;right:-8px;min-width:22px;height:22px;border-radius:11px;background:var(--amber);color:#15191E;font:700 12px/22px var(--mono);padding:0 5px}
+.cam-thumb span:empty{display:none}
+.cam-ok{justify-self:end;background:var(--amber);color:#15191E;font-weight:700;border-radius:8px;padding:11px 16px}
 /* relatório de jornada — mesmo padrão da folha "JORNADA TOTAL" do Excel (papel branco, azul 1F4E79) */
 .rj{background:#fff;color:#222;border-radius:var(--r);padding:22px 20px;font-family:Calibri,'Segoe UI',system-ui,sans-serif}
 .rj h3{color:#1F4E79;font-size:22px;font-weight:700;margin:0 0 4px}
@@ -253,7 +280,7 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v2.8 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v2.9 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1700,7 +1727,7 @@ document.addEventListener('keydown',e=>{if(!FV.id)return;if(e.key==='Escape')fot
 function fotosBind(){
   const fd=$('#fData');if(!fd)return;
   fd.onchange=e=>{FDATA=e.target.value};
-  $('#fCam').onclick=()=>{FDATA=fd.value||hojeLocal();try{if(AND&&AND.pastaFoto)AND.pastaFoto(FDATA.slice(0,7))}catch(e){}$('#fCamIn').click()};
+  $('#fCam').onclick=()=>{FDATA=fd.value||hojeLocal();if(camDisponivel())camAbre();else camFallback()};
   $('#fGal').onclick=()=>{FDATA=fd.value||hojeLocal();$('#fGalIn').click()};
   $('#fCamIn').onchange=e=>{const fs=[...e.target.files];e.target.value='';fotoAdiciona(fs,true)};
   $('#fGalIn').onchange=e=>{const fs=[...e.target.files];e.target.value='';fotoAdiciona(fs,false)};
@@ -1715,6 +1742,100 @@ function fotosBind(){
     alert(AND&&AND.guardarFoto?`${ok} foto${ok>1?'s':''} guardada${ok>1?'s':''} em Imagens › Discos Tacografo`:`${ok} foto${ok>1?'s':''} descarregada${ok>1?'s':''} para Transferências`);
   };
 }
+/* ---- câmara integrada na app (getUserMedia): pré-visualização, guia do disco, lanterna ---- */
+const CAM={stream:null,track:null,facing:'environment',torch:false,recorte:true,n:0,iso:'',ocupado:false,ult:null};
+const camDisponivel=()=>!!(window.isSecureContext&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
+async function fotoGuardaBlob(blob,iso,origem){
+  const {img,th}=await fotoProcessa(blob);
+  const ts=Date.now(),hh=new Date(ts).toTimeString().slice(0,8).replace(/:/g,'')+'_'+String(ts%1000).padStart(3,'0');
+  const meta={id:'f'+ts.toString(36)+Math.random().toString(36).slice(2,6),iso,ts,nome:`disco_${iso}_${hh}.jpg`,
+    w:img.w,h:img.h,bytes:img.b.size,thumb:th.b,origem,noAparelho:false};
+  // na app Android cada foto fica também em Imagens › Discos Tacografo › AAAA-MM
+  if(AND&&AND.guardarFoto){try{meta.noAparelho=/^Guardado/.test(AND.guardarFoto(meta.nome,iso.slice(0,7),await blobB64(img.b)))}catch(e){}}
+  await FDB.put(meta,img.b);
+  return meta;
+}
+function camFallback(){try{if(AND&&AND.pastaFoto)AND.pastaFoto((FDATA||hojeLocal()).slice(0,7))}catch(e){}const i=$('#fCamIn');if(i)i.click()}
+async function camAbre(){
+  CAM.iso=FDATA||MDRAFT.d||hojeLocal();CAM.n=0;CAM.ult=null;
+  let el=$('#camView');
+  if(!el){el=document.createElement('div');el.id='camView';el.className='camv';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','Câmara');document.body.appendChild(el)}
+  el.innerHTML=`<video id="camVid" playsinline muted autoplay></video>
+    <div class="cam-guia ${CAM.recorte?'':'livre'}" id="camGuia"><div></div></div>
+    <div class="cam-flash" id="camFlash"></div>
+    <div class="cam-top">
+      <button class="cam-b" id="camX" aria-label="Fechar câmara">✕</button>
+      <span class="cam-data">Disco ${dPT(CAM.iso)}</span><span class="cam-sp"></span>
+      <button class="cam-b" id="camRec" aria-pressed="${CAM.recorte}" aria-label="Recortar ao disco" title="Recortar ao disco">◯</button>
+      <button class="cam-b" id="camLuz" aria-pressed="false" aria-label="Lanterna" title="Lanterna" hidden>🔦</button>
+      <button class="cam-b" id="camTroca" aria-label="Trocar câmara" title="Trocar câmara" hidden>⟲</button>
+    </div>
+    <div class="cam-msg" id="camMsg">A abrir a câmara…</div>
+    <div class="cam-bot">
+      <button class="cam-thumb" id="camUlt" aria-label="Ver fotos tiradas" disabled><span id="camN"></span></button>
+      <button class="cam-disp" id="camDisp" aria-label="Tirar foto" disabled><i></i></button>
+      <button class="cam-ok" id="camOk">Concluir</button>
+    </div>`;
+  el.hidden=false;document.body.style.overflow='hidden';
+  $('#camX').onclick=camFecha;$('#camOk').onclick=camFecha;
+  $('#camDisp').onclick=camDispara;
+  $('#camVid').onclick=camDispara;
+  $('#camUlt').onclick=()=>{const id=CAM.ult;camFecha();if(id)setTimeout(()=>fotoAbre(id),60)};
+  $('#camRec').onclick=e=>{CAM.recorte=!CAM.recorte;e.currentTarget.setAttribute('aria-pressed',CAM.recorte);$('#camGuia').classList.toggle('livre',!CAM.recorte)};
+  $('#camLuz').onclick=async e=>{try{await CAM.track.applyConstraints({advanced:[{torch:!CAM.torch}]});CAM.torch=!CAM.torch;e.currentTarget.setAttribute('aria-pressed',CAM.torch)}catch(x){}};
+  $('#camTroca').onclick=()=>{CAM.facing=CAM.facing==='environment'?'user':'environment';camLiga()};
+  await camLiga();
+}
+function camPara(){if(CAM.stream)CAM.stream.getTracks().forEach(t=>t.stop());CAM.stream=null;CAM.track=null;CAM.torch=false}
+async function camLiga(){
+  camPara();const msg=$('#camMsg');
+  try{
+    CAM.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:CAM.facing},width:{ideal:3840},height:{ideal:2160}}});
+  }catch(e){
+    if(!$('#camView')||$('#camView').hidden)return;
+    msg.innerHTML=`Sem acesso à câmara${e&&e.name==='NotAllowedError'?' — autoriza a câmara nas definições da app ou do browser':''}.<br><br><button class="cam-ok" id="camAlt">Usar a câmara do telemóvel</button>`;
+    $('#camAlt').onclick=()=>{camFecha();camFallback()};return;
+  }
+  if(!$('#camView')||$('#camView').hidden){camPara();return}
+  const v=$('#camVid');v.srcObject=CAM.stream;try{await v.play()}catch(e){}
+  CAM.track=CAM.stream.getVideoTracks()[0];
+  const cap=CAM.track.getCapabilities?CAM.track.getCapabilities():{};
+  $('#camLuz').hidden=!cap.torch;$('#camLuz').setAttribute('aria-pressed','false');
+  try{if(cap.focusMode&&cap.focusMode.includes('continuous'))await CAM.track.applyConstraints({advanced:[{focusMode:'continuous'}]})}catch(e){}
+  try{const devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');$('#camTroca').hidden=devs.length<2}catch(e){}
+  msg.textContent='';$('#camDisp').disabled=false;
+}
+async function camDispara(){
+  const v=$('#camVid');if(CAM.ocupado||!CAM.track||!v||!v.videoWidth)return;
+  CAM.ocupado=true;$('#camDisp').disabled=true;
+  const W=v.videoWidth,H=v.videoHeight;let sx=0,sy=0,sw=W,sh=H;
+  if(CAM.recorte){ // recorta ao quadrado da guia (com uma pequena margem), convertendo do ecrã para os píxeis do vídeo
+    const r=v.getBoundingClientRect(),g=$('#camGuia div').getBoundingClientRect();
+    const k=Math.max(r.width/W,r.height/H),ox=(r.width-W*k)/2,oy=(r.height-H*k)/2;
+    sx=(g.left-r.left-ox)/k;sy=(g.top-r.top-oy)/k;sw=g.width/k;sh=g.height/k;
+    const m=sw*.05;sx-=m;sy-=m;sw+=2*m;sh+=2*m;
+    sx=Math.max(0,sx);sy=Math.max(0,sy);sw=Math.min(W-sx,sw);sh=Math.min(H-sy,sh);
+  }
+  const c=document.createElement('canvas');c.width=Math.round(sw);c.height=Math.round(sh);
+  c.getContext('2d').drawImage(v,sx,sy,sw,sh,0,0,c.width,c.height);
+  const f=$('#camFlash');f.classList.remove('on');void f.offsetWidth;f.classList.add('on');
+  try{if(navigator.vibrate)navigator.vibrate(30)}catch(e){}
+  try{
+    const blob=await new Promise((ok,ko)=>c.toBlob(b=>b?ok(b):ko(new Error('jpeg')),'image/jpeg',.93));
+    const meta=await fotoGuardaBlob(blob,CAM.iso,'câmara da app');
+    CAM.n++;CAM.ult=meta.id;
+    const u=$('#camUlt');if(u){u.disabled=false;u.style.backgroundImage=`url(${thumbURL(meta)})`;$('#camN').textContent=CAM.n}
+  }catch(e){const msg=$('#camMsg');if(msg)msg.textContent='Não consegui guardar a foto.'}
+  CAM.ocupado=false;const d=$('#camDisp');if(d)d.disabled=false;
+}
+async function camFecha(){
+  camPara();const el=$('#camView');if(el){el.hidden=true;el.innerHTML=''}document.body.style.overflow='';
+  if(CAM.n){await fotosCarrega();FMSG=`${CAM.n} foto${CAM.n>1?'s':''} tirada${CAM.n>1?'s':''} · disco de ${dPT(CAM.iso)}${AND&&AND.guardarFoto?' · também em Imagens › Discos Tacografo':''}`;FMES=''}
+  CAM.n=0;if(TAB==='manual')render();
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&CAM.stream)camPara();else if(!document.hidden&&$('#camView')&&!$('#camView').hidden&&!CAM.stream)camLiga()});
+/* botão "voltar" do Android: fecha primeiro a câmara ou o visualizador */
+window.voltarApp=()=>{if($('#camView')&&!$('#camView').hidden){camFecha();return true}if(FV.id){fotoFecha();return true}return false};
 function manual(){
   const D=MDRAFT;
   const ds=Object.keys(S.man).sort().reverse();
