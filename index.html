@@ -141,6 +141,31 @@ input.obs{width:200px}
 td .chk{width:16px;height:16px;accent-color:var(--amber)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:640px){.grid2{grid-template-columns:1fr}}
+/* ---- fotos dos discos ---- */
+.fgrupo{margin:6px 0 16px}
+.fmes{font-family:var(--cond);font-weight:600;font-size:16px;letter-spacing:.04em;text-transform:uppercase;margin:4px 0 8px;color:var(--ink)}
+.fmes span{font-family:var(--mono);font-size:12px;color:var(--dim);margin-left:6px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px}
+.ftile{position:relative;display:block;aspect-ratio:1;border-radius:9px;overflow:hidden;border:1px solid var(--line);background:var(--panel2);padding:0}
+.ftile img{width:100%;height:100%;object-fit:cover;display:block}
+.ftile span{position:absolute;left:0;right:0;bottom:0;padding:14px 7px 5px;font-size:11.5px;font-weight:600;color:#fff;text-align:left;background:linear-gradient(transparent,rgba(0,0,0,.65));font-family:var(--mono)}
+.ftile:hover{border-color:var(--amber)}
+.fDia{padding:3px 8px;font-size:12px}
+.fview{position:fixed;inset:0;z-index:10000;background:rgba(10,12,15,.96);display:flex;flex-direction:column;color:#e8e6e1}
+.fview[hidden]{display:none}
+.fv-top,.fv-bot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 12px}
+.fv-bot{justify-content:center;padding-bottom:max(12px,env(safe-area-inset-bottom))}
+.fview .note{color:#b9c0c8}
+.fview input{background:#1c2127;color:#e8e6e1;border-color:#2a2f36}
+.fview .btn{background:#1c2127;color:#e8e6e1;border-color:#2a2f36}
+.fview .btn.amber{background:var(--amber);color:#15191E;border-color:var(--amber)}
+.fview .btn.danger{color:#ff8a8a;border-color:#7a3434}
+.fview .btn:disabled{opacity:.35}
+.fv-img{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:zoom-in;touch-action:pinch-zoom}
+.fv-img img{max-width:100%;max-height:100%;object-fit:contain}
+.fv-img.zoom{overflow:auto;align-items:flex-start;justify-content:flex-start;cursor:zoom-out}
+.fv-img.zoom img{max-width:none;max-height:none}
+@media(max-width:980px){.fgrid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}}
 /* relatório de jornada — mesmo padrão da folha "JORNADA TOTAL" do Excel (papel branco, azul 1F4E79) */
 .rj{background:#fff;color:#222;border-radius:var(--r);padding:22px 20px;font-family:Calibri,'Segoe UI',system-ui,sans-serif}
 .rj h3{color:#1F4E79;font-size:22px;font-weight:700;margin:0 0 4px}
@@ -228,7 +253,7 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v2.7.3 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v2.8 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1553,6 +1578,143 @@ function manCond(m){
   if(m.modo==='blk')return (m.blocos||[]).reduce((s,x)=>{if(+x.a!==3||!x.ini||!x.fim)return s;let a=parseHM(x.ini),b=parseHM(x.fim);if(b<=a)b+=1440;return s+(b-a)},0);
   return parseHM(m.cond);
 }
+/* ============ FOTOS DOS DISCOS — pasta própria (IndexedDB 'tacho_fotos') ============ */
+const FDB={
+  db:null,
+  open(){if(this.db)return Promise.resolve(this.db);return new Promise((ok,ko)=>{const r=indexedDB.open('tacho_fotos',1);
+    r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('meta'))d.createObjectStore('meta',{keyPath:'id'});if(!d.objectStoreNames.contains('img'))d.createObjectStore('img')};
+    r.onsuccess=()=>{this.db=r.result;ok(r.result)};r.onerror=()=>ko(r.error)})},
+  async lista(){const db=await this.open();return new Promise((ok,ko)=>{const q=db.transaction('meta').objectStore('meta').getAll();q.onsuccess=()=>ok(q.result||[]);q.onerror=()=>ko(q.error)})},
+  async img(id){const db=await this.open();return new Promise((ok,ko)=>{const q=db.transaction('img').objectStore('img').get(id);q.onsuccess=()=>ok(q.result);q.onerror=()=>ko(q.error)})},
+  async put(meta,img){const db=await this.open();return new Promise((ok,ko)=>{const t=db.transaction(['meta','img'],'readwrite');t.objectStore('meta').put(meta);if(img)t.objectStore('img').put(img,meta.id);t.oncomplete=ok;t.onerror=()=>ko(t.error)})},
+  async apaga(id){const db=await this.open();return new Promise((ok,ko)=>{const t=db.transaction(['meta','img'],'readwrite');t.objectStore('meta').delete(id);t.objectStore('img').delete(id);t.oncomplete=ok;t.onerror=()=>ko(t.error)})}
+};
+let FOTOS=[],FURL={},FDATA='',FMES='',FMSG='',FBUSY=false;
+const hojeLocal=()=>new Date().toLocaleDateString('sv-SE');
+const MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const mesNome=m=>{const [y,n]=m.split('-');return MESES[+n-1]+' '+y};
+const kb=b=>b>1048576?(b/1048576).toFixed(1).replace('.',',')+' MB':Math.max(1,Math.round(b/1024))+' KB';
+async function fotosCarrega(){
+  try{FOTOS=(await FDB.lista()).sort((a,b)=>b.iso.localeCompare(a.iso)||b.ts-a.ts)}catch(e){FOTOS=[]}
+}
+const fotosDia=iso=>FOTOS.filter(f=>f.iso===iso);
+const thumbURL=f=>FURL[f.id]||(FURL[f.id]=URL.createObjectURL(f.thumb));
+/* reduz a foto (máx. 2200 px, JPEG) e cria a miniatura; respeita a rotação da câmara */
+async function fotoProcessa(file){
+  let src;
+  try{src=await createImageBitmap(file,{imageOrientation:'from-image'})}
+  catch(e){src=await new Promise((ok,ko)=>{const im=new Image();im.onload=()=>ok(im);im.onerror=()=>ko(new Error('imagem'));im.src=URL.createObjectURL(file)})}
+  const W=src.width||src.naturalWidth,H=src.height||src.naturalHeight;
+  const faz=(max,q)=>{const k=Math.min(1,max/Math.max(W,H)),c=document.createElement('canvas');
+    c.width=Math.max(1,Math.round(W*k));c.height=Math.max(1,Math.round(H*k));c.getContext('2d').drawImage(src,0,0,c.width,c.height);
+    return new Promise((ok,ko)=>c.toBlob(b=>b?ok({b,w:c.width,h:c.height}):ko(new Error('jpeg')),'image/jpeg',q))};
+  return {img:await faz(2200,.86),th:await faz(360,.72)};
+}
+async function fotoAdiciona(files,daCam){
+  const iso=FDATA||MDRAFT.d||hojeLocal();
+  const lista=[...files].filter(f=>/^image\//.test(f.type)||/\.(jpe?g|png|webp|heic|heif)$/i.test(f.name));
+  if(!lista.length)return;
+  FBUSY=true;FMSG='A guardar '+lista.length+' foto'+(lista.length>1?'s':'')+'…';render();
+  let n=0,falhou=0;
+  for(const f of lista){
+    try{
+      const {img,th}=await fotoProcessa(f);
+      const ts=Date.now()+n,hh=new Date(ts).toTimeString().slice(0,8).replace(/:/g,'');
+      const meta={id:'f'+ts.toString(36)+Math.random().toString(36).slice(2,6),iso,ts,nome:`disco_${iso}_${hh}${n?'_'+n:''}.jpg`,
+        w:img.w,h:img.h,bytes:img.b.size,thumb:th.b,origem:daCam?'câmara':'galeria',noAparelho:!!(daCam&&AND&&AND.pastaFoto)};
+      await FDB.put(meta,img.b);n++;
+    }catch(e){falhou++}
+  }
+  await fotosCarrega();FBUSY=false;
+  FMSG=(n?`${n} foto${n>1?'s':''} guardada${n>1?'s':''} na pasta · disco de ${dPT(iso)}`:'')+(falhou?` · ${falhou} não ${falhou>1?'puderam':'pôde'} ser lida${falhou>1?'s':''}`:'');
+  FMES='';render();
+}
+const blobB64=b=>new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=ko;r.readAsDataURL(b)});
+async function fotoGuardaAparelho(f,silencio){
+  const b=await FDB.img(f.id);if(!b)return 'Foto não encontrada.';
+  if(AND&&AND.guardarFoto){const r=AND.guardarFoto(f.nome,f.iso.slice(0,7),await blobB64(b));if(!silencio)alert(r);return r}
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=f.nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+function fotosHTML(){
+  const ms=[...new Set(FOTOS.map(f=>f.iso.slice(0,7)))];
+  const lista=FOTOS.filter(f=>!FMES||f.iso.slice(0,7)===FMES);
+  const grupos=[];for(const f of lista){const m=f.iso.slice(0,7);let g=grupos.find(x=>x.m===m);if(!g)grupos.push(g={m,fs:[]});g.fs.push(f)}
+  const tot=FOTOS.reduce((s,f)=>s+(f.bytes||0),0);
+  const dia=FDATA||MDRAFT.d||hojeLocal();
+  return `<h2>Fotos dos discos</h2>
+  <div class="card">
+    <div class="row" style="margin-top:0">
+      <label class="note">Data do disco <input type="date" id="fData" value="${esc(dia)}"></label>
+      <button class="btn amber" id="fCam" ${FBUSY?'disabled':''}>📷 Tirar foto</button>
+      <button class="btn" id="fGal" ${FBUSY?'disabled':''}>🖼 Da galeria</button>
+      <input type="file" id="fCamIn" accept="image/*" capture="environment" hidden>
+      <input type="file" id="fGalIn" accept="image/*" multiple hidden>
+    </div>
+    ${FMSG?`<div class="note" style="margin-top:4px">${esc(FMSG)}</div>`:''}
+  </div>
+  <h2>Pasta de fotos (${FOTOS.length})</h2>
+  ${FOTOS.length?`<div class="row" style="margin-top:0">
+      <select id="fMesF"><option value="">Todos os meses</option>${ms.map(m=>`<option value="${m}" ${FMES===m?'selected':''}>${mesNome(m)}</option>`).join('')}</select>
+      <span class="chip">${FOTOS.length} foto${FOTOS.length>1?'s':''} · ${kb(tot)}</span>
+      <button class="btn" id="fTodas">⇩ Guardar ${FMES?'o mês':'todas'} no telemóvel</button>
+    </div>
+    ${grupos.map(g=>`<div class="fgrupo"><div class="fmes">${mesNome(g.m)} <span>${g.fs.length}</span></div>
+      <div class="fgrid">${g.fs.map(f=>`<button class="ftile" data-f="${f.id}" aria-label="Abrir foto do disco de ${dPT(f.iso)}">
+        <img src="${thumbURL(f)}" alt="" loading="lazy"><span>${dPT(f.iso).slice(0,5)}${f.noAparelho?' · 📱':''}</span></button>`).join('')}</div></div>`).join('')}`
+  :'<div class="empty">Ainda não há fotos de discos.</div>'}`;
+}
+/* ---- visualizador ---- */
+let FV={id:null,url:null};
+async function fotoAbre(id){
+  const i=FOTOS.findIndex(f=>f.id===id);if(i<0)return;const f=FOTOS[i];
+  const b=await FDB.img(id);if(FV.url)URL.revokeObjectURL(FV.url);
+  FV={id,url:b?URL.createObjectURL(b):thumbURL(f)};
+  let el=$('#fView');if(!el){el=document.createElement('div');el.id='fView';el.className='fview';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');document.body.appendChild(el)}
+  el.innerHTML=`<div class="fv-top">
+      <button class="btn" id="fvX" aria-label="Fechar">✕</button>
+      <label class="note">Disco de <input type="date" id="fvData" value="${esc(f.iso)}"></label>
+      <span class="note">${f.w}×${f.h} · ${kb(f.bytes||0)} · ${esc(f.origem||'')}</span>
+    </div>
+    <div class="fv-img" id="fvImg"><img src="${FV.url}" alt="Foto do disco de ${dPT(f.iso)}"></div>
+    <div class="fv-bot">
+      <button class="btn" id="fvAnt" ${i<=0?'disabled':''} aria-label="Anterior">‹</button>
+      <button class="btn amber" id="fvGuardar">⇩ Guardar no telemóvel</button>
+      <button class="btn danger" id="fvDel">Apagar</button>
+      <button class="btn" id="fvSeg" ${i>=FOTOS.length-1?'disabled':''} aria-label="Seguinte">›</button>
+    </div>`;
+  el.hidden=false;document.body.style.overflow='hidden';
+  $('#fvX').onclick=fotoFecha;
+  $('#fvAnt').onclick=()=>fotoAbre(FOTOS[i-1].id);
+  $('#fvSeg').onclick=()=>fotoAbre(FOTOS[i+1].id);
+  $('#fvImg').onclick=()=>$('#fvImg').classList.toggle('zoom');
+  $('#fvGuardar').onclick=()=>fotoGuardaAparelho(f);
+  $('#fvDel').onclick=async()=>{if(!confirm('Apagar esta foto da pasta?'))return;
+    await FDB.apaga(f.id);if(FURL[f.id]){URL.revokeObjectURL(FURL[f.id]);delete FURL[f.id]}
+    await fotosCarrega();const prox=FOTOS[Math.min(i,FOTOS.length-1)];if(prox)fotoAbre(prox.id);else fotoFecha();render()};
+  $('#fvData').onchange=async e=>{if(!e.target.value)return;f.iso=e.target.value;f.nome=f.nome.replace(/disco_\d{4}-\d{2}-\d{2}/,'disco_'+f.iso);
+    await FDB.put(f);await fotosCarrega();render();fotoAbre(f.id)};
+}
+function fotoFecha(){const el=$('#fView');if(el){el.hidden=true;el.innerHTML=''}if(FV.url)URL.revokeObjectURL(FV.url);FV={id:null,url:null};document.body.style.overflow=''}
+document.addEventListener('keydown',e=>{if(!FV.id)return;if(e.key==='Escape')fotoFecha();
+  const i=FOTOS.findIndex(f=>f.id===FV.id);if(e.key==='ArrowLeft'&&i>0)fotoAbre(FOTOS[i-1].id);if(e.key==='ArrowRight'&&i<FOTOS.length-1)fotoAbre(FOTOS[i+1].id)});
+function fotosBind(){
+  const fd=$('#fData');if(!fd)return;
+  fd.onchange=e=>{FDATA=e.target.value};
+  $('#fCam').onclick=()=>{FDATA=fd.value||hojeLocal();try{if(AND&&AND.pastaFoto)AND.pastaFoto(FDATA.slice(0,7))}catch(e){}$('#fCamIn').click()};
+  $('#fGal').onclick=()=>{FDATA=fd.value||hojeLocal();$('#fGalIn').click()};
+  $('#fCamIn').onchange=e=>{const fs=[...e.target.files];e.target.value='';fotoAdiciona(fs,true)};
+  $('#fGalIn').onchange=e=>{const fs=[...e.target.files];e.target.value='';fotoAdiciona(fs,false)};
+  const mf=$('#fMesF');if(mf)mf.onchange=e=>{FMES=e.target.value;render()};
+  document.querySelectorAll('.ftile,.fDia').forEach(b=>b.onclick=()=>fotoAbre(b.dataset.f));
+  const ft=$('#fTodas');if(ft)ft.onclick=async()=>{
+    const l=FOTOS.filter(f=>!FMES||f.iso.slice(0,7)===FMES);if(!l.length)return;
+    if(!confirm(`Guardar ${l.length} foto${l.length>1?'s':''} no telemóvel?`))return;
+    ft.disabled=true;let ok=0;
+    for(const f of l){try{await fotoGuardaAparelho(f,true);ok++}catch(e){}await new Promise(r=>setTimeout(r,AND?60:350))}
+    ft.disabled=false;
+    alert(AND&&AND.guardarFoto?`${ok} foto${ok>1?'s':''} guardada${ok>1?'s':''} em Imagens › Discos Tacografo`:`${ok} foto${ok>1?'s':''} descarregada${ok>1?'s':''} para Transferências`);
+  };
+}
 function manual(){
   const D=MDRAFT;
   const ds=Object.keys(S.man).sort().reverse();
@@ -1564,6 +1726,7 @@ function manual(){
     <td class="t">${esc(m.ini)} → ${esc(m.fim)}</td><td class="t">${hm(manJorn(m))}</td><td class="t">${hm(manCond(m))}</td>
     <td>${m.modo==='blk'?'<span class="tag info">BLOCOS</span>':'<span class="tag dim">TOTAIS</span>'}</td>
     <td class="note" style="white-space:normal;max-width:180px">${esc(S.obs[d]||'')}</td>
+    <td>${fotosDia(d).length?`<button class="btn fDia" data-f="${fotosDia(d)[0].id}" aria-label="Ver fotos do disco">📷 ${fotosDia(d).length}</button>`:''}</td>
     <td class="noprint"><button class="btn mEd" data-d="${d}">✎ Editar</button> <button class="btn danger mDel" data-d="${d}">✕</button></td></tr>`}).join('');
   const blocos=(D.blocos||[]).map((b,i)=>`<div class="row" style="margin:6px 0">
     <select class="mBA" data-i="${i}">${ACTN.map((n,ai)=>`<option value="${ai}" ${+b.a===ai?'selected':''}>${n}</option>`).join('')}</select>
@@ -1601,8 +1764,9 @@ function manual(){
     <div class="row"><button class="btn amber" id="mSave">Guardar dia</button><button class="btn" id="mNew">Limpar</button></div>
   </div>
   <h2>Dias inseridos manualmente (${ds.length})</h2>
-  ${ds.length?`<div class="tw"><table><tr><th>Data</th><th>Origem</th><th>Turno</th><th>Jornada</th><th>Condução</th><th>Modo</th><th>Observações</th><th class="noprint"></th></tr>${rows}</table></div>`
-  :'<div class="empty">Ainda não há dias inseridos à mão.</div>'}`;
+  ${ds.length?`<div class="tw"><table><tr><th>Data</th><th>Origem</th><th>Turno</th><th>Jornada</th><th>Condução</th><th>Modo</th><th>Observações</th><th>Fotos</th><th class="noprint"></th></tr>${rows}</table></div>`
+  :'<div class="empty">Ainda não há dias inseridos à mão.</div>'}
+  ${fotosHTML()}`;
 }
 
 /* ---- Jornada total ---- */
@@ -2081,6 +2245,7 @@ function download(name,blob){
 }
 if(AND&&AND.imprimir&&typeof window!=='undefined')window.print=()=>{try{AND.imprimir()}catch(e){}};
 function bind(){
+  fotosBind();
   document.querySelectorAll('#fMes,#fSem').forEach(el=>el.onchange=e=>{if(e.target.id==='fMes'){fMes=e.target.value;fSem=''}else{fSem=e.target.value;fMes=''}render()});
   document.querySelectorAll('.eEsp').forEach(el=>el.onchange=e=>{S.espera[e.target.dataset.d]=parseHM(e.target.value);save();rebuild()});
   document.querySelectorAll('.eKm').forEach(el=>el.onchange=e=>{S.km[e.target.dataset.d]=+e.target.value||0;save();rebuild()});
@@ -2310,6 +2475,7 @@ const IDB={
   const stored=await IDB.all();
   if(stored&&stored.length)for(const b of stored){try{RAW.push(parseDDD(b))}catch(x){}}
 }catch(e){}
+  fotosCarrega().then(()=>{if(TAB==='manual')render()});
   if(RAW.length||Object.keys(S.man||{}).length)rebuild(); // dias inseridos à mão contam mesmo sem ficheiros do cartão
   if(nvLig()&&S.nuvem.auto&&navigator.onLine){try{await nvSincroniza()}catch(e){}}
 })();

@@ -36,6 +36,9 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -50,9 +53,13 @@ public class MainActivity extends Activity {
     static final String HOST = "apk-leitor-tacografo.vercel.app";
     static final String ACTION_PERM = "pt.caio.tacografo.USB_PERMISSION";
     static final int REQ_FILE = 41;
+    static final int REQ_CAM = 42;
+    static final String PASTA_FOTOS = "Discos Tacografo";
 
     WebView web;
     ValueCallback<Uri[]> fileCb;
+    Uri camUri;
+    String fotoSub = "";
 
     @Override
     protected void onCreate(Bundle b) {
@@ -89,9 +96,13 @@ public class MainActivity extends Activity {
             public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (fileCb != null) fileCb.onReceiveValue(null);
                 fileCb = cb;
+                boolean imagem = false;
+                for (String a : p.getAcceptTypes()) if (a != null && a.startsWith("image")) imagem = true;
+                // "Tirar foto" na aba Discos: abre a câmara e grava em Imagens/Discos Tacografo/AAAA-MM
+                if (imagem && p.isCaptureEnabled() && abreCamara()) return true;
                 Intent i = new Intent(Intent.ACTION_GET_CONTENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
-                i.setType("*/*");
+                i.setType(imagem ? "image/*" : "*/*");
                 i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, p.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE);
                 try { startActivityForResult(Intent.createChooser(i, "Escolher ficheiros"), REQ_FILE); }
                 catch (Exception e) { fileCb = null; return false; }
@@ -99,7 +110,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        if (b != null) web.restoreState(b);
+        if (b != null) { web.restoreState(b); camUri = b.getParcelable("camUri"); }
         else web.loadUrl(URL);
     }
 
@@ -107,10 +118,45 @@ public class MainActivity extends Activity {
     protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out);
         web.saveState(out);
+        if (camUri != null) out.putParcelable("camUri", camUri);
+    }
+
+    String pastaRelativa(String sub) {
+        String s = sub == null ? "" : sub.replaceAll("[^0-9A-Za-z_-]", "");
+        return Environment.DIRECTORY_PICTURES + "/" + PASTA_FOTOS + (s.isEmpty() ? "" : "/" + s);
+    }
+
+    boolean abreCamara() {
+        if (Build.VERSION.SDK_INT < 29) return false; // nos Android antigos fica a galeria
+        try {
+            String nome = "disco_" + new SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(new Date()) + ".jpg";
+            ContentValues v = new ContentValues();
+            v.put(MediaStore.Images.Media.DISPLAY_NAME, nome);
+            v.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+            v.put(MediaStore.Images.Media.RELATIVE_PATH, pastaRelativa(fotoSub));
+            camUri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
+            if (camUri == null) return false;
+            Intent c = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            c.putExtra(MediaStore.EXTRA_OUTPUT, camUri);
+            c.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(c, REQ_CAM);
+            return true;
+        } catch (Exception e) {
+            if (camUri != null) try { getContentResolver().delete(camUri, null, null); } catch (Exception x) { }
+            camUri = null;
+            return false;
+        }
     }
 
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
+        if (req == REQ_CAM) {
+            Uri u = camUri; camUri = null;
+            boolean ok = res == RESULT_OK && u != null;
+            if (!ok && u != null) try { getContentResolver().delete(u, null, null); } catch (Exception e) { }
+            if (fileCb != null) { fileCb.onReceiveValue(ok ? new Uri[]{u} : null); fileCb = null; }
+            return;
+        }
         if (req != REQ_FILE || fileCb == null) { super.onActivityResult(req, res, data); return; }
         Uri[] r = null;
         if (res == RESULT_OK && data != null) {
@@ -278,6 +324,35 @@ public class MainActivity extends Activity {
                 return "Guardado em Transferências: " + nome;
             } catch (Exception e) {
                 return "Não consegui guardar o ficheiro: " + e.getMessage();
+            }
+        }
+
+        /* Mês da próxima foto tirada com a câmara (subpasta AAAA-MM). */
+        @JavascriptInterface
+        public void pastaFoto(String sub) { fotoSub = sub == null ? "" : sub; }
+
+        /* Guarda uma foto de disco em Imagens/Discos Tacografo/AAAA-MM. */
+        @JavascriptInterface
+        public String guardarFoto(String nome, String sub, String b64) {
+            try {
+                byte[] d = Base64.decode(b64, Base64.DEFAULT);
+                String n = (nome == null || nome.isEmpty() ? "disco.jpg" : nome).replaceAll("[^0-9A-Za-z_.-]", "_");
+                String rel = pastaRelativa(sub);
+                if (Build.VERSION.SDK_INT >= 29) {
+                    ContentValues v = new ContentValues();
+                    v.put(MediaStore.Images.Media.DISPLAY_NAME, n);
+                    v.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+                    v.put(MediaStore.Images.Media.RELATIVE_PATH, rel);
+                    Uri u = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
+                    try (OutputStream o = getContentResolver().openOutputStream(u)) { o.write(d); }
+                } else {
+                    File dir = new File(Environment.getExternalStorageDirectory(), rel);
+                    dir.mkdirs();
+                    try (FileOutputStream o = new FileOutputStream(new File(dir, n))) { o.write(d); }
+                }
+                return "Guardado em " + rel.replace(Environment.DIRECTORY_PICTURES, "Imagens").replace("/", " › ");
+            } catch (Exception e) {
+                return "Não consegui guardar a foto: " + e.getMessage();
             }
         }
 
