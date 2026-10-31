@@ -11,12 +11,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
-/* modo claro/escuro — mesma chave da CAL LOG; claro por defeito */
-(function(){var K='cal-log-theme',t;try{t=new URLSearchParams(location.search).get('theme')||localStorage.getItem(K)}catch(e){}
+/* modo claro/escuro — claro por defeito */
+(function(){var K='tacografo-theme',t;try{t=new URLSearchParams(location.search).get('theme')||localStorage.getItem(K)}catch(e){}
 if(t!=='light'&&t!=='dark')t='light';document.documentElement.setAttribute('data-theme',t)})();
 </script>
 <style>
-/* ===== Tema CAL LOG — asfalto, papel e âmbar (igual à Gestão de Transportes) ===== */
+/* ===== Tema — asfalto, papel e âmbar ===== */
 :root{
   --asfalto:#15191E; --asfalto2:#1d232a;
   --bg:#F4F4F1; --panel:#FFFFFF; --panel2:#F8F7F3; --line:#e3e1da;
@@ -291,11 +291,11 @@ tr.xtot td{font-weight:700;border-top:2px solid var(--ink);background:var(--pane
 <aside class="side">
   <div class="brand">
     <div class="brand-mark"><img src="icons/icon-192.png" alt="" width="36" height="36"></div>
-    <div><div class="brand-name">CAL LOG</div><div class="brand-sub">Controle de tacógrafo</div></div>
+    <div><div class="brand-name">TACÓGRAFO</div><div class="brand-sub">Controle de jornada · Caio</div></div>
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v2.9.5 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v2.9.6 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -2621,7 +2621,7 @@ function bind(){
 
 /* ============ FICHEIROS ============ */
 $('#btnLoad').onclick=()=>$('#fileIn').click();
-(()=>{const b=$('#cl-theme-toggle'),K='cal-log-theme';
+(()=>{const b=$('#cl-theme-toggle'),K='tacografo-theme';
   const pinta=()=>{const d=document.documentElement.getAttribute('data-theme')==='dark';b.textContent=d?'☀️':'🌙';
     const m=document.querySelector('meta[name=theme-color]');if(m)m.content=d?'#0d1013':'#15191E'};
   b.onclick=()=>{const n=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
