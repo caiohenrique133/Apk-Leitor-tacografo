@@ -167,6 +167,10 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
 .fv-img.zoom img{max-width:none;max-height:none}
 @media(max-width:980px){.fgrid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}}
 /* ---- permissão da câmara ---- */
+/* filtro e total da aba Extras */
+.xfiltro{margin:16px 0 10px}
+.xfiltro .btn .mono{font-size:12px;opacity:.75;margin-left:2px}
+tr.xtot td{font-weight:700;border-top:2px solid var(--ink);background:var(--panel2)}
 .camperm{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%;padding:10px 12px;border:1px dashed var(--amber);border-radius:9px;background:var(--warn-bg)}
 .camperm-t{font-weight:600}
 .camperm .note{flex-basis:100%}
@@ -288,7 +292,7 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v2.9.2 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v2.9.3 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -2040,10 +2044,17 @@ function extraRows(){
     return {iso:r.iso,dia:r.dia,tipo,obs:r.obs,h:r.jornada,km:r.km,valor:m.valor||'',pago:m.pago||'Não',notas:m.notas||''};
   });
 }
+let XPAG=''; // filtro da aba Extras: '' todos · 'sim' pagos · 'nao' não pagos
 function extras(){
   const X=extraRows();
   const tot=X.reduce((s,x)=>s+(+x.valor||0),0),por=X.filter(x=>x.pago!=='Sim').reduce((s,x)=>s+(+x.valor||0),0);
-  const rows=X.map(x=>`<tr><td>${dPT(x.iso)}</td><td>${x.dia}</td>
+  const nPag=X.filter(x=>x.pago==='Sim').length;
+  const V=X.filter(x=>XPAG===''||(XPAG==='sim'?x.pago==='Sim':x.pago!=='Sim'));
+  const vTot=V.reduce((s,x)=>s+(+x.valor||0),0);
+  const filtro=`<div class="row xfiltro" role="group" aria-label="Filtrar por pagamento">
+    ${[['','Todos',X.length],['sim','Pagos',nPag],['nao','Não pagos',X.length-nPag]].map(([v,t,n])=>
+      `<button class="btn ${XPAG===v?'amber':''} xF" data-f="${v}" aria-pressed="${XPAG===v}">${t} <span class="mono">${n}</span></button>`).join('')}</div>`;
+  const rows=V.map(x=>`<tr><td>${dPT(x.iso)}</td><td>${x.dia}</td>
     <td><select class="xT" data-d="${x.iso}">${['Sábado','Domingo','Feriado','Pernoite','Outro'].map(o=>`<option ${x.tipo===o?'selected':''}>${o}</option>`).join('')}</select></td>
     <td class="note" style="white-space:normal;max-width:220px">${esc(x.obs)}</td>
     <td class="t">${hm(x.h)}</td><td class="t">${x.km}</td>
@@ -2051,7 +2062,10 @@ function extras(){
     <td><select class="xP" data-d="${x.iso}"><option ${x.pago==='Sim'?'selected':''}>Sim</option><option ${x.pago!=='Sim'?'selected':''}>Não</option></select></td>
     <td><input class="obs xN" data-d="${x.iso}" value="${esc(x.notas)}" placeholder="notas"></td></tr>`).join('');
   return `<div class="kgrid">${kpi('Total registado',tot.toFixed(2)+' €')}${kpi('Por receber',por.toFixed(2)+' €',por?'warn':'ok')}${kpi('Recebido',(tot-por).toFixed(2)+' €','ok')}${kpi('Dias extra',X.length)}</div>
-  <div class="tw"><table><tr><th>Data</th><th>Dia</th><th>Tipo</th><th>Observações</th><th>Horas</th><th>KM</th><th>Valor (€)</th><th>Pago?</th><th>Notas</th></tr>${rows}</table></div>`;
+  ${filtro}
+  ${V.length?`<div class="tw"><table><tr><th>Data</th><th>Dia</th><th>Tipo</th><th>Observações</th><th>Horas</th><th>KM</th><th>Valor (€)</th><th>Pago?</th><th>Notas</th></tr>${rows}
+    <tr class="xtot"><td colspan="4">Total · ${V.length} dia${V.length>1?'s':''}</td><td class="t">${hm(V.reduce((s,x)=>s+x.h,0))}</td><td class="t">${V.reduce((s,x)=>s+(+x.km||0),0)}</td><td class="t">${vTot.toFixed(2)} €</td><td colspan="2"></td></tr></table></div>`
+  :`<div class="empty">${XPAG==='sim'?'Ainda não há dias pagos.':XPAG==='nao'?'Não há dias por pagar.':'Ainda não há dias extra.'}</div>`}`;
 }
 
 /* ---- Alertas ---- */
@@ -2417,6 +2431,7 @@ function bind(){
   document.querySelectorAll('.xT').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).tipo=e.target.value;save()});
   document.querySelectorAll('.xV').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).valor=e.target.value;save();render()});
   document.querySelectorAll('.xP').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).pago=e.target.value;save();render()});
+  document.querySelectorAll('.xF').forEach(el=>el.onclick=()=>{XPAG=el.dataset.f;render()});
   document.querySelectorAll('.xN').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).notas=e.target.value;save()});
   document.querySelectorAll('.dDel').forEach(el=>el.onclick=e=>{S.dest.splice(+e.target.dataset.i,1);save();render()});
   // --- contrato / salário ---
