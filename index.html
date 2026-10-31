@@ -174,6 +174,11 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
 .xfiltro{margin:16px 0 10px}
 .xfiltro .btn .mono{font-size:12px;opacity:.75;margin-left:2px}
 tr.xtot td{font-weight:700;border-top:2px solid var(--ink);background:var(--panel2)}
+/* pasta no telemóvel */
+.pasta{font-family:var(--mono);font-size:13px;line-height:1.9;margin:2px 0 6px;padding:10px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}
+.pasta-raiz{font-weight:600}
+.pasta>div:not(.pasta-raiz){padding-left:22px}
+.pasta .note{font-family:'IBM Plex Sans',system-ui,sans-serif;margin-left:6px}
 .camperm{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%;padding:10px 12px;border:1px dashed var(--amber);border-radius:9px;background:var(--warn-bg)}
 .camperm-t{font-weight:600}
 .camperm .note{flex-basis:100%}
@@ -295,7 +300,7 @@ tr.xtot td{font-weight:700;border-top:2px solid var(--ink);background:var(--pane
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v2.9.7 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v3.0 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1746,7 +1751,7 @@ function fotosBind(){
     ft.disabled=true;let ok=0;
     for(const f of l){try{await fotoGuardaAparelho(f,true);ok++}catch(e){}await new Promise(r=>setTimeout(r,AND?60:350))}
     ft.disabled=false;
-    alert(AND&&AND.guardarFoto?`${ok} foto${ok>1?'s':''} guardada${ok>1?'s':''} em Imagens › Discos Tacografo`:`${ok} foto${ok>1?'s':''} descarregada${ok>1?'s':''} para Transferências`);
+    alert(AND&&AND.guardarFoto?`${ok} foto${ok>1?'s':''} guardada${ok>1?'s':''} em ${PASTA_TXT} › Fotos discos`:`${ok} foto${ok>1?'s':''} descarregada${ok>1?'s':''} para Transferências`);
   };
 }
 /* ---- câmara integrada na app (getUserMedia): pré-visualização, guia do disco, lanterna ---- */
@@ -1757,7 +1762,7 @@ async function fotoGuardaBlob(blob,iso,origem){
   const ts=Date.now(),hh=new Date(ts).toTimeString().slice(0,8).replace(/:/g,'')+'_'+String(ts%1000).padStart(3,'0');
   const meta={id:'f'+ts.toString(36)+Math.random().toString(36).slice(2,6),iso,ts,nome:`disco_${iso}_${hh}.jpg`,
     w:img.w,h:img.h,bytes:img.b.size,thumb:th.b,origem,noAparelho:false};
-  // na app Android cada foto fica também em Imagens › Discos Tacografo › AAAA-MM
+  // na app Android cada foto fica também em Transferências › Tacografo › Fotos discos › AAAA-MM
   if(AND&&AND.guardarFoto){try{meta.noAparelho=/^Guardado/.test(AND.guardarFoto(meta.nome,iso.slice(0,7),await blobB64(img.b)))}catch(e){}}
   await FDB.put(meta,img.b);
   return meta;
@@ -1878,7 +1883,7 @@ async function camDispara(){
 }
 async function camFecha(){
   camPara();const el=$('#camView');if(el){el.hidden=true;el.innerHTML=''}document.body.style.overflow='';
-  if(CAM.n){await fotosCarrega();FMSG=`${CAM.n} foto${CAM.n>1?'s':''} tirada${CAM.n>1?'s':''} · disco de ${dPT(CAM.iso)}${AND&&AND.guardarFoto?' · também em Imagens › Discos Tacografo':''}`;FMES=''}
+  if(CAM.n){await fotosCarrega();FMSG=`${CAM.n} foto${CAM.n>1?'s':''} tirada${CAM.n>1?'s':''} · disco de ${dPT(CAM.iso)}${AND&&AND.guardarFoto?' · também em '+PASTA_TXT+' › Fotos discos':''}`;FMES=''}
   CAM.n=0;if(TAB==='manual')render();
 }
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&CAM.stream)camPara();else if(!document.hidden&&$('#camView')&&!$('#camView').hidden&&!CAM.stream)camLiga()});
@@ -2408,6 +2413,41 @@ async function dddFicheiros(){
   return out.sort((a,b)=>(b.fim||'').localeCompare(a.fim||'')||b.t-a.t);
 }
 let DDDS=[];
+/* ---- pasta no telemóvel: Transferências › Tacografo (app Android) ---- */
+const PASTA_APP=()=>!!(AND&&AND.guardarEm);
+const PASTA_TXT='Transferências › Tacografo';
+async function pastaGuarda(sub,nome,blob,modo){return String(AND.guardarEm(sub,nome,await blobB64(blob),modo))}
+function pastaHTML(){
+  if(!PASTA_APP())return `<div class="card"><h2 style="margin-top:0">Pasta no telemóvel</h2><span class="note">${AND?'Instala a versão mais recente da app Android para criar':'A app Android cria'} a pasta <b>${PASTA_TXT}</b>.${AND?'':' No browser, os ficheiros vão para Transferências.'}</span></div>`;
+  return `<div class="card"><h2 style="margin-top:0">Pasta no telemóvel</h2>
+    <div class="pasta"><div class="pasta-raiz">📁 ${PASTA_TXT}</div>
+      <div>📂 DDD <span class="note">ficheiros do cartão</span></div>
+      <div>📂 Fotos discos <span class="note">uma pasta por mês</span></div>
+      <div>📂 Relatorios <span class="note">Excel e CSV</span></div>
+      <div>📂 Backups <span class="note">cópias de segurança</span></div></div>
+    <div class="row"><button class="btn amber" id="pastaTudo">⇩ Guardar tudo na pasta</button><button class="btn" id="pastaAbrir">📂 Abrir pasta</button></div>
+    <div class="note" id="pastaEstado" aria-live="polite"></div></div>`;
+}
+async function pastaGuardaTudo(btn){
+  const est=$('#pastaEstado');btn.disabled=true;
+  const c={ddd:0,fotos:0,ja:0,err:0};
+  const conta=(r,k)=>{if(r.startsWith('ok'))c[k]++;else if(r.startsWith('existe'))c.ja++;else c.err++};
+  try{
+    est.textContent='A guardar o backup…';
+    if(!(await pastaGuarda('Backups','backup_tacografo_'+hojeLocal()+'.json',new Blob([JSON.stringify(S,null,1)],{type:'application/json'}),2)).startsWith('ok'))c.err++;
+    const dd=await dddFicheiros();
+    for(const [i,f] of dd.entries()){est.textContent=`A guardar ficheiros .ddd… ${i+1}/${dd.length}`;conta(await pastaGuarda('DDD',f.nome,new Blob([f.ab]),1),'ddd')}
+    await fotosCarrega();
+    for(const [i,f] of FOTOS.entries()){
+      est.textContent=`A guardar fotos… ${i+1}/${FOTOS.length}`;
+      const b=await FDB.img(f.id);if(!b)continue;
+      const r=await pastaGuarda('Fotos discos/'+f.iso.slice(0,7),f.nome,b,1);conta(r,'fotos');
+      if(!r.startsWith('erro')&&!f.noAparelho){f.noAparelho=true;await FDB.put(f)}
+    }
+    est.textContent=`Pasta atualizada: backup de hoje, ${c.ddd} ficheiro${c.ddd===1?'':'s'} .ddd e ${c.fotos} foto${c.fotos===1?'':'s'} novos${c.ja?` · ${c.ja} já lá estavam`:''}${c.err?` · ${c.err} com erro`:''}.`;
+  }catch(e){est.textContent='Não consegui terminar: '+e.message}
+  btn.disabled=false;
+}
 async function dddPreenche(){
   const el=$('#dddLista');if(!el)return;
   try{DDDS=await dddFicheiros()}catch(e){DDDS=[]}
@@ -2420,11 +2460,16 @@ async function dddPreenche(){
     :'<div class="empty">Ainda não há ficheiros do cartão. Lê o cartão na aba <b>Leitor</b> ou carrega ficheiros com <b>＋ Ficheiros</b>.</div>';
   const um=f=>download(f.nome,new Blob([f.ab],{type:'application/octet-stream'}));
   document.querySelectorAll('.dddUm').forEach(b=>b.onclick=()=>um(DDDS[+b.dataset.i]));
-  const t=$('#dddTodos');if(t)t.onclick=async()=>{t.disabled=true;for(const f of DDDS){um(f);await new Promise(r=>setTimeout(r,AND?120:400))}t.disabled=false};
+  const t=$('#dddTodos');if(t)t.onclick=async()=>{t.disabled=true;
+    if(PASTA_APP()){let ok=0,ja=0;for(const f of DDDS){const r=await pastaGuarda('DDD',f.nome,new Blob([f.ab]),1);if(r.startsWith('ok'))ok++;else if(r.startsWith('existe'))ja++}
+      alert(`${PASTA_TXT} › DDD\n${ok} guardado${ok===1?'':'s'}${ja?` · ${ja} já lá estava${ja===1?'':'m'}`:''}`)}
+    else for(const f of DDDS){um(f);await new Promise(r=>setTimeout(r,AND?120:400))}
+    t.disabled=false};
 }
 function exportar(){
   return `<div class="card"><h2 style="margin-top:0">Relatório de jornada</h2>
   <div class="row"><button class="btn amber" id="exRelJ">📄 Abrir relatório de jornada</button></div></div>
+  ${pastaHTML()}
   <div class="card"><h2 style="margin-top:0">Ficheiros .ddd do cartão</h2><div id="dddLista"><span class="note">A carregar…</span></div></div>
   <div class="grid2">
   <div class="card"><h2 style="margin-top:0">Excel (formato da aba DADOS)</h2><button class="btn amber" id="exXlsx">⇩ Exportar .xlsx</button></div>
@@ -2612,6 +2657,8 @@ function bind(){
   };
   if(q('#exWipe'))q('#exWipe').onclick=()=>{if(confirm('Apagar todas as notas manuais?')){localStorage.removeItem(LS);location.reload()}};
   if(q('#dddLista'))dddPreenche();
+  if(q('#pastaTudo'))q('#pastaTudo').onclick=e=>pastaGuardaTudo(e.currentTarget);
+  if(q('#pastaAbrir'))q('#pastaAbrir').onclick=()=>{try{AND.abrirPasta('')}catch(e){}};
   if(q('#exPdf'))q('#exPdf').onclick=()=>{TAB='fisc';render();setTimeout(()=>window.print(),150)};
   // --- relatório de jornada ---
   const abreRelJ=()=>{RJ_VOLTA=TAB;TAB='reljornada';render();scrollTo(0,0)};

@@ -24,6 +24,9 @@ import android.util.Base64;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.provider.Settings;
+import android.provider.DocumentsContract;
+import android.app.DownloadManager;
+import android.database.Cursor;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
@@ -60,7 +63,7 @@ public class MainActivity extends Activity {
     static final int REQ_CAM = 42;
     static final int REQ_PERM_CAM = 43;
     PermissionRequest pedidoCam;
-    static final String PASTA_FOTOS = "Discos Tacografo";
+    static final String RAIZ = "Tacografo"; // Transferências/Tacografo/{DDD, Fotos discos, Relatorios, Backups}
 
     WebView web;
     ValueCallback<Uri[]> fileCb;
@@ -145,10 +148,68 @@ public class MainActivity extends Activity {
         if (camUri != null) out.putParcelable("camUri", camUri);
     }
 
-    String pastaRelativa(String sub) {
-        String s = sub == null ? "" : sub.replaceAll("[^0-9A-Za-z_-]", "");
-        return Environment.DIRECTORY_PICTURES + "/" + PASTA_FOTOS + (s.isEmpty() ? "" : "/" + s);
+    /* caminho dentro de Transferências/Tacografo */
+    String relDoc(String sub) {
+        String x = sub == null ? "" : sub.replaceAll("[^0-9A-Za-z _/-]", "").replaceAll("/+", "/").replaceAll("^/|/$", "").trim();
+        return Environment.DIRECTORY_DOWNLOADS + "/" + RAIZ + (x.isEmpty() ? "" : "/" + x);
     }
+
+    String legivel(String rel) {
+        return rel.replace(Environment.DIRECTORY_DOWNLOADS, "Transferências").replace("/", " › ");
+    }
+
+    String mimeDe(String nome) {
+        String n = nome.toLowerCase(Locale.ROOT);
+        if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
+        if (n.endsWith(".json")) return "application/json";
+        if (n.endsWith(".csv")) return "text/csv";
+        if (n.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        if (n.endsWith(".pdf")) return "application/pdf";
+        return "application/octet-stream";
+    }
+
+    /* ficheiro já criado pela app nesta pasta? (Android 10+) */
+    Uri procura(String rel, String nome) {
+        try (Cursor c = getContentResolver().query(MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                new String[]{MediaStore.Downloads._ID},
+                MediaStore.Downloads.RELATIVE_PATH + "=? AND " + MediaStore.Downloads.DISPLAY_NAME + "=?",
+                new String[]{rel + "/", nome}, null)) {
+            if (c != null && c.moveToFirst())
+                return android.content.ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(0));
+        } catch (Exception e) { }
+        return null;
+    }
+
+    /* modo: 0 = novo ficheiro · 1 = saltar se já existir · 2 = substituir. Devolve "ok|…", "existe|…" ou "erro|…" */
+    String escrever(String sub, String nome, byte[] d, int modo) {
+        String n = (nome == null || nome.isEmpty() ? "ficheiro" : nome).replaceAll("[^0-9A-Za-z _.()-]", "_");
+        String rel = relDoc(sub);
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                Uri u = modo > 0 ? procura(rel, n) : null;
+                if (u != null && modo == 1) return "existe|" + legivel(rel);
+                if (u == null) {
+                    ContentValues v = new ContentValues();
+                    v.put(MediaStore.Downloads.DISPLAY_NAME, n);
+                    v.put(MediaStore.Downloads.MIME_TYPE, mimeDe(n));
+                    v.put(MediaStore.Downloads.RELATIVE_PATH, rel);
+                    u = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                }
+                try (OutputStream o = getContentResolver().openOutputStream(u, "wt")) { o.write(d); }
+            } else {
+                File dir = new File(Environment.getExternalStorageDirectory(), rel);
+                dir.mkdirs();
+                File f = new File(dir, n);
+                if (f.exists() && modo == 1) return "existe|" + legivel(rel);
+                try (FileOutputStream o = new FileOutputStream(f)) { o.write(d); }
+            }
+            return "ok|" + legivel(rel);
+        } catch (Exception e) {
+            return "erro|" + e.getMessage();
+        }
+    }
+
+    String pastaRelativa(String sub) { return relDoc("Fotos discos/" + (sub == null ? "" : sub)); }
 
     boolean abreCamara() {
         if (Build.VERSION.SDK_INT < 29) return false; // nos Android antigos fica a galeria
@@ -156,10 +217,10 @@ public class MainActivity extends Activity {
         try {
             String nome = "disco_" + new SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(new Date()) + ".jpg";
             ContentValues v = new ContentValues();
-            v.put(MediaStore.Images.Media.DISPLAY_NAME, nome);
-            v.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-            v.put(MediaStore.Images.Media.RELATIVE_PATH, pastaRelativa(fotoSub));
-            camUri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
+            v.put(MediaStore.Downloads.DISPLAY_NAME, nome);
+            v.put(MediaStore.Downloads.MIME_TYPE, "image/jpeg");
+            v.put(MediaStore.Downloads.RELATIVE_PATH, pastaRelativa(fotoSub));
+            camUri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
             if (camUri == null) return false;
             Intent c = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             c.putExtra(MediaStore.EXTRA_OUTPUT, camUri);
@@ -370,26 +431,37 @@ public class MainActivity extends Activity {
             con = null; itf = null; epIn = null; epOut = null;
         }
 
-        /* Guarda um ficheiro (.ddd, .csv, .xlsx, .json) na pasta Transferências. */
+        /* Guarda um ficheiro na pasta Transferências/Tacografo, na subpasta do seu tipo. */
         @JavascriptInterface
         public String guardar(String nome, String b64) {
-            try {
-                byte[] d = Base64.decode(b64, Base64.DEFAULT);
-                if (Build.VERSION.SDK_INT >= 29) {
-                    ContentValues v = new ContentValues();
-                    v.put(MediaStore.Downloads.DISPLAY_NAME, nome);
-                    v.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
-                    Uri u = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
-                    try (OutputStream o = getContentResolver().openOutputStream(u)) { o.write(d); }
-                } else {
-                    File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                    dir.mkdirs();
-                    try (FileOutputStream o = new FileOutputStream(new File(dir, nome))) { o.write(d); }
+            String n = nome == null ? "" : nome.toLowerCase(Locale.ROOT);
+            String sub = n.endsWith(".ddd") || n.endsWith(".esm") || n.endsWith(".tgd") ? "DDD"
+                    : n.endsWith(".json") ? "Backups" : n.endsWith(".jpg") ? "Fotos discos" : "Relatorios";
+            String r = escrever(sub, nome, Base64.decode(b64, Base64.DEFAULT), 0);
+            return r.startsWith("ok|") ? "Guardado em " + r.substring(3) + ":\n" + nome : "Não consegui guardar o ficheiro: " + r.substring(r.indexOf('|') + 1);
+        }
+
+        @JavascriptInterface
+        public String guardarEm(String sub, String nome, String b64, int modo) {
+            try { return escrever(sub, nome, Base64.decode(b64, Base64.DEFAULT), modo); }
+            catch (Exception e) { return "erro|" + e.getMessage(); }
+        }
+
+        /* Abre a pasta Transferências/Tacografo (ou uma subpasta) no gestor de ficheiros. */
+        @JavascriptInterface
+        public void abrirPasta(String sub) {
+            runOnUiThread(() -> {
+                String rel = relDoc(sub);
+                try {
+                    Uri u = Uri.parse("content://com.android.externalstorage.documents/document/primary%3A" + Uri.encode(rel));
+                    Intent i = new Intent(Intent.ACTION_VIEW);
+                    i.setDataAndType(u, DocumentsContract.Document.MIME_TYPE_DIR);
+                    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(i);
+                } catch (Exception e) {
+                    try { startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)); } catch (Exception x) { }
                 }
-                return "Guardado em Transferências: " + nome;
-            } catch (Exception e) {
-                return "Não consegui guardar o ficheiro: " + e.getMessage();
-            }
+            });
         }
 
         /* Permissão da câmara pedida a partir da página. */
@@ -417,29 +489,11 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void pastaFoto(String sub) { fotoSub = sub == null ? "" : sub; }
 
-        /* Guarda uma foto de disco em Imagens/Discos Tacografo/AAAA-MM. */
+        /* Guarda uma foto de disco em Transferências/Tacografo/Fotos discos/AAAA-MM. */
         @JavascriptInterface
         public String guardarFoto(String nome, String sub, String b64) {
-            try {
-                byte[] d = Base64.decode(b64, Base64.DEFAULT);
-                String n = (nome == null || nome.isEmpty() ? "disco.jpg" : nome).replaceAll("[^0-9A-Za-z_.-]", "_");
-                String rel = pastaRelativa(sub);
-                if (Build.VERSION.SDK_INT >= 29) {
-                    ContentValues v = new ContentValues();
-                    v.put(MediaStore.Images.Media.DISPLAY_NAME, n);
-                    v.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-                    v.put(MediaStore.Images.Media.RELATIVE_PATH, rel);
-                    Uri u = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
-                    try (OutputStream o = getContentResolver().openOutputStream(u)) { o.write(d); }
-                } else {
-                    File dir = new File(Environment.getExternalStorageDirectory(), rel);
-                    dir.mkdirs();
-                    try (FileOutputStream o = new FileOutputStream(new File(dir, n))) { o.write(d); }
-                }
-                return "Guardado em " + rel.replace(Environment.DIRECTORY_PICTURES, "Imagens").replace("/", " › ");
-            } catch (Exception e) {
-                return "Não consegui guardar a foto: " + e.getMessage();
-            }
+            String r = escrever("Fotos discos/" + (sub == null ? "" : sub), nome, Base64.decode(b64, Base64.DEFAULT), 1);
+            return r.startsWith("erro|") ? "Não consegui guardar a foto: " + r.substring(5) : "Guardado em " + r.substring(r.indexOf('|') + 1);
         }
 
         /* Dossier de fiscalização → imprimir ou guardar em PDF. */
