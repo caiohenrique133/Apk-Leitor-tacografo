@@ -288,7 +288,7 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v2.9.1 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v2.9.2 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -297,10 +297,6 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
     <div class="hsub" id="hDriver">Carrega ficheiros .esm / .ddd do cartão de condutor</div>
   </div>
   <div class="top-ctrl noprint">
-    <select id="tzSel" aria-label="Fuso horário" title="Fuso horário">
-      <option value="utc">🕒 UTC</option>
-      <option value="pt">🕒 Portugal (UTC+1 verão)</option>
-    </select>
     <button class="filebtn" id="btnLoad"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Ficheiros</button>
     <input type="file" id="fileIn" multiple accept=".esm,.ESM,.ddd,.DDD,.tgd" hidden>
   </div>
@@ -346,14 +342,8 @@ const hmm=m=>m==null?'—':hm(m);
 const dISO=d=>d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate());
 const dPT=iso=>iso.split('-').reverse().join('/');
 const clk=absMin=>pad(Math.floor(absMin/60)%24)+':'+pad(absMin%60);
-function tzOff(absMinUTC){ // minutos a somar
-  if(S.tz==='utc')return 0;
-  const d=new Date(absMinUTC*60000);
-  const y=d.getUTCFullYear();
-  const lastSun=(mo)=>{const x=new Date(Date.UTC(y,mo+1,0));return Date.UTC(y,mo,x.getUTCDate()-x.getUTCDay())/60000};
-  const on=lastSun(2)+60, off=lastSun(9)+60; // 01:00 UTC último dom. março/outubro
-  return (absMinUTC>=on&&absMinUTC<off)?60:0;
-}
+/* horário: sempre o que vem do cartão (UTC), sem ajuste de hora de verão */
+function tzOff(){return 0}
 const L=(abs)=>abs+tzOff(abs); // UTC→local
 const U=(loc)=>loc-tzOff(loc); // local→UTC (aprox. na hora da mudança)
 function carve(list,a,b){ // remove o intervalo [a,b) da linha temporal
@@ -1367,7 +1357,6 @@ function render(){
   const P=S.perfil||{};
   if(IDENT)$('#hDriver').textContent=IDENT.nome+' '+IDENT.ap+' · cartão '+IDENT.card+(DL?' · descarga '+dPT(dISO(new Date(DL*1000))):'');
   else if(P.nome||P.cartao)$('#hDriver').textContent=[P.nome,P.ap].filter(Boolean).join(' ')+(P.cartao?' · cartão '+P.cartao:'')+(P.empresa?' · '+P.empresa:'');
-  $('#tzSel').value=S.tz;
   if(!ROWS.length&&!['manual','leitor','conta'].includes(TAB)){M.innerHTML=empty();return}
   const V={painel,registos,leitor,manual,jornada,lei84,descansos,destinos,extras,alertas,fisc,salario,exportar,conta,reljornada:relJornada};
   M.innerHTML=`<section class="on ${TAB==='fisc'||TAB==='reljornada'?'print':''}" id="sec">${V[TAB]()}</section>`;
@@ -2629,7 +2618,6 @@ $('#fileIn').onchange=async e=>{
   // persistir ficheiros em IndexedDB simples (localStorage não chega): base64 no LS se couber
   render&&rebuild();
 };
-$('#tzSel').onchange=e=>{S.tz=e.target.value;save();rebuild()};
 nav();render();
 /* PWA */
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
