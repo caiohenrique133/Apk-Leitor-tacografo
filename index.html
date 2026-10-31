@@ -58,7 +58,8 @@ h2::after{content:"";flex:1;height:1px;background:var(--line)}
 .app{display:flex;min-height:100vh}
 .side{width:218px;flex-shrink:0;background:var(--asfalto);color:#e8e6e1;display:flex;flex-direction:column;padding:18px 14px;position:sticky;top:0;height:100vh;overflow-y:auto;scrollbar-width:thin}
 .brand{display:flex;gap:10px;align-items:center;padding:4px 8px 14px}
-.brand-mark{width:36px;height:36px;border-radius:8px;background:var(--amber);color:#15191E;display:flex;align-items:center;justify-content:center;flex:none}
+.brand-mark{width:36px;height:36px;border-radius:9px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 0 0 2px var(--amber)}
+.brand-mark img{width:100%;height:100%;display:block}
 .brand-name{font-family:var(--cond);font-weight:700;font-size:20px;letter-spacing:.08em;line-height:1}
 .brand-sub{font-size:11px;color:#9aa3ad;margin-top:2px}
 .roadline{height:3px;background:repeating-linear-gradient(90deg,var(--amber) 0 18px,transparent 18px 32px);margin:0 8px 14px;opacity:.9}
@@ -289,12 +290,12 @@ tr.xtot td{font-weight:700;border-top:2px solid var(--ink);background:var(--pane
 <div class="app">
 <aside class="side">
   <div class="brand">
-    <div class="brand-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35a1 1 0 0 0-.78-.38H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></div>
+    <div class="brand-mark"><img src="icons/icon-192.png" alt="" width="36" height="36"></div>
     <div><div class="brand-name">CAL LOG</div><div class="brand-sub">Controle de tacógrafo</div></div>
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v2.9.4 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v2.9.5 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
