@@ -300,7 +300,7 @@ tr.xtot td{font-weight:700;border-top:2px solid var(--ink);background:var(--pane
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v3.0 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v3.1 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1334,7 +1334,7 @@ const IC={
  conta:'<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>'
 };
 const ico=(k,n=17)=>`<svg width="${n}" height="${n}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[k]||''}</svg>`;
-const TABS=[['painel','Painel'],['registos','Registos'],['leitor','Leitor'],['manual','Discos'],['jornada','Jornada'],['lei84','Lei 84'],['descansos','Descansos'],['destinos','Destinos'],['extras','Extras'],['alertas','Alertas'],['fisc','Fiscalização'],['salario','Salário'],['exportar','Exportar'],['conta','Conta']];
+const TABS=[['painel','Painel'],['registos','Registos'],['leitor','Leitor'],['manual','Discos'],['jornada','Jornada'],['lei84','Lei 84'],['descansos','Descansos'],['destinos','Destinos'],['extras','Extras'],['alertas','Alertas'],['fisc','Fiscalização'],['exportar','Exportar'],['conta','Conta']];
 let TAB='painel',fMes='',fSem='';
 function nav(){
   $('#tabs').innerHTML=TABS.map(t=>`<button data-t="${t[0]}" class="nav-item ${TAB===t[0]?'on':''}" ${TAB===t[0]?'aria-current="page"':''}>${ico(t[0])}<span>${t[1]}</span></button>`).join('');
@@ -1370,7 +1370,7 @@ function render(){
   if(IDENT)$('#hDriver').textContent=IDENT.nome+' '+IDENT.ap+' · cartão '+IDENT.card+(DL?' · descarga '+dPT(dISO(new Date(DL*1000))):'');
   else if(P.nome||P.cartao)$('#hDriver').textContent=[P.nome,P.ap].filter(Boolean).join(' ')+(P.cartao?' · cartão '+P.cartao:'')+(P.empresa?' · '+P.empresa:'');
   if(!ROWS.length&&!['manual','leitor','conta'].includes(TAB)){M.innerHTML=empty();return}
-  const V={painel,registos,leitor,manual,jornada,lei84,descansos,destinos,extras,alertas,fisc,salario,exportar,conta,reljornada:relJornada};
+  const V={painel,registos,leitor,manual,jornada,lei84,descansos,destinos,extras,alertas,fisc,exportar,conta,reljornada:relJornada};
   M.innerHTML=`<section class="on ${TAB==='fisc'||TAB==='reljornada'?'print':''}" id="sec">${V[TAB]()}</section>`;
   bind();
 }
@@ -1559,6 +1559,24 @@ function conta(){
     <div class="row"><button class="btn amber" id="pGuardar">Guardar perfil</button>
     ${IDENT?`<button class="btn" id="pDoCartao">Preencher a partir do cartão lido</button>`:''}</div>
   </div>
+
+  ${(()=>{const c=C(),DIAS=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+    const num=(k,lab,val,ph)=>`<label class="note" style="min-width:120px">${lab}<input class="mini" data-c="${k}" value="${val}" placeholder="${ph||''}"></label>`;
+    return `<h2>A minha escala</h2>
+  <div class="card">
+    <div class="row">${DIAS.map((d,i)=>`<label class="note"><input type="checkbox" class="cEsc" data-i="${i}" ${c.escala[i]?'checked':''}> ${d}</label>`).join('')}</div>
+    <div class="row">
+      ${num('horasDia','Horas normais/dia',hm(c.horasDia),'8:00')}
+      ${num('horasSemana','Horas normais/semana',hm(c.horasSemana),'40:00')}
+      <label class="note">Turno base<select data-c="turno">${['diurno','noturno','misto'].map(t=>`<option ${c.turno===t?'selected':''}>${t}</option>`).join('')}</select></label>
+    </div>
+    <div class="row">
+      <label class="note">O que conta como trabalho<select data-c="base">
+        <option value="trab" ${c.base==='trab'?'selected':''}>Condução + Outros + Disponibilidade</option>
+        <option value="jornada" ${c.base==='jornada'?'selected':''}>Jornada porta a porta</option></select></label>
+    </div>
+    <div class="row"><button class="btn amber" id="cGuardar">Guardar escala</button></div>
+  </div>`})()}
 
   ${(()=>{const c=C();
     const acima=ROWS.filter(r=>r.jornada>c.ampMax).length;
