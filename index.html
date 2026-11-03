@@ -185,6 +185,7 @@ tr.xtot td{font-weight:700;border-top:2px solid var(--ink);background:var(--pane
 .prox-dados span{display:block;font-size:11.5px;color:var(--dim)}
 .prox-dados b{font-family:var(--mono);font-weight:600;font-size:14px}
 td.turno{font-weight:600}
+.chip[hidden]{display:none}
 .pasta{font-family:var(--mono);font-size:13px;line-height:1.9;margin:2px 0 6px;padding:10px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}
 .pasta-raiz{font-weight:600}
 .pasta>div:not(.pasta-raiz){padding-left:22px}
@@ -310,7 +311,7 @@ td.turno{font-weight:600}
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v3.2 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v3.3 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -866,6 +867,12 @@ function nvJunta(loc,rem,remNovo){
     const vistos=new Set((out.ctrlHist||[]).map(x=>JSON.stringify(x)));
     out.ctrlHist=(out.ctrlHist||[]).concat(rem.ctrlHist.filter(x=>!vistos.has(JSON.stringify(x))));
   }
+  // férias, licenças e baixas: junta por id (o do outro lado só substitui quando é mais recente)
+  if(rem&&Array.isArray(rem.aus)){
+    out.aus=out.aus||[];
+    for(const a of rem.aus){const i=out.aus.findIndex(x=>x.id===a.id);if(i<0)out.aus.push(a);else if(remNovo)out.aus[i]=a}
+  }
+  if(rem&&rem.feriasDir!=null&&(remNovo||out.feriasDir==null))out.feriasDir=rem.feriasDir;
   if(remNovo&&rem){
     if(rem.perfil)out.perfil=Object.assign({},out.perfil,rem.perfil);
     if(rem.contrato)out.contrato=Object.assign({},out.contrato,rem.contrato);
@@ -889,7 +896,7 @@ function restauraBackup(b){
 }
 function estadoLocal(){
   return {espera:S.espera,obs:S.obs,extra:S.extra,km:S.km,xmeta:S.xmeta,dest:S.dest,
-          tz:S.tz,ctrlHist:S.ctrlHist,man:S.man,bisLim:S.bisLim,perfil:S.perfil,contrato:S.contrato,carim:S.carim||0};
+          tz:S.tz,ctrlHist:S.ctrlHist,man:S.man,bisLim:S.bisLim,perfil:S.perfil,contrato:S.contrato,aus:S.aus||[],feriasDir:S.feriasDir,carim:S.carim||0};
 }
 async function nvSincroniza(){
   if(NV.ocupado)return;
@@ -1180,6 +1187,7 @@ function rebuild(){
     (wk[k]=wk[k]||{k,rows:[]}).rows.push(r);
   }
   WEEKS=Object.values(wk).sort((a,b)=>a.k<b.k?-1:1);
+  const AUSM=ausMapa(),TRAB=new Set(ROWS.map(r=>r.iso));
   WEEKS.forEach((w,ix)=>{
     const sum=f=>w.rows.reduce((s,r)=>s+f(r),0);
     w.dias=w.rows.length;w.cond=sum(r=>r.cond);w.ot=sum(r=>r.ot);w.disp=sum(r=>r.disp);
@@ -1187,8 +1195,10 @@ function rebuild(){
     w.trab=w.cond+w.ot+w.disp;
     const e=new Date(w.k+'T00:00:00Z');e.setUTCDate(e.getUTCDate()+6);w.kEnd=dISO(e);
     // média 4 meses (17 semanas a terminar nesta)
-    let s=0,n=0;for(let p=Math.max(0,ix-16);p<=ix;p++){s+=WEEKS[p].trab;n++}
-    w.m4=s/n;
+    // semanas com férias, licenças ou baixas contam (7 − dias ausentes) ÷ 7 de semana
+    w.aus=ausNaSemana(w.k,AUSM,TRAB);
+    let s=0,n=0;for(let p=Math.max(0,ix-16);p<=ix;p++){s+=WEEKS[p].trab;n+=(7-(WEEKS[p].aus??ausNaSemana(WEEKS[p].k,AUSM,TRAB)))/7}
+    w.m4=n>0?s/n:0;
     // bissemanal = acumulado do período em curso (reinicia após descanso ≥ 45h)
     const lr=w.rows[w.rows.length-1];
     w.biIdx=lr.bi;w.bis=lr.biT;w.bisC=lr.biC;
@@ -1341,16 +1351,17 @@ const IC={
  fisc:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
  salario:'<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/>',
  exportar:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+ ferias:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
  conta:'<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>'
 };
 const ico=(k,n=17)=>`<svg width="${n}" height="${n}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[k]||''}</svg>`;
-const TABS=[['painel','Painel'],['registos','Registos'],['leitor','Leitor'],['manual','Discos'],['jornada','Jornada'],['lei84','Lei 84'],['descansos','Descansos'],['destinos','Destinos'],['extras','Extras'],['alertas','Alertas'],['fisc','Fiscalização'],['exportar','Exportar'],['conta','Conta']];
+const TABS=[['painel','Painel'],['registos','Registos'],['leitor','Leitor'],['manual','Discos'],['jornada','Jornada'],['lei84','Lei 84'],['descansos','Descansos'],['destinos','Destinos'],['extras','Extras'],['ferias','Férias'],['alertas','Alertas'],['fisc','Fiscalização'],['exportar','Exportar'],['conta','Conta']];
 let TAB='painel',fMes='',fSem='';
 function nav(){
   $('#tabs').innerHTML=TABS.map(t=>`<button data-t="${t[0]}" class="nav-item ${TAB===t[0]?'on':''}" ${TAB===t[0]?'aria-current="page"':''}>${ico(t[0])}<span>${t[1]}</span></button>`).join('');
   $('#tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{TAB=b.dataset.t;render();scrollTo(0,0)});
   const tt=TABS.find(t=>t[0]===TAB);
-  $('#pgTitle').textContent=tt?tt[1]:TAB==='reljornada'?'Relatório de jornada':'';
+  $('#pgTitle').textContent=TAB==='ferias'?'Férias, licenças e baixas':tt?tt[1]:TAB==='reljornada'?'Relatório de jornada':'';
 }
 function strip(segs,st,en){
   const day0=Math.floor(L(st)/1440)*1440;let html='<div class="strip" title="00:00 → 24:00">',pos=0;
@@ -1379,8 +1390,8 @@ function render(){
   const P=S.perfil||{};
   if(IDENT)$('#hDriver').textContent=IDENT.nome+' '+IDENT.ap+' · cartão '+IDENT.card+(DL?' · descarga '+dPT(dISO(new Date(DL*1000))):'');
   else if(P.nome||P.cartao)$('#hDriver').textContent=[P.nome,P.ap].filter(Boolean).join(' ')+(P.cartao?' · cartão '+P.cartao:'')+(P.empresa?' · '+P.empresa:'');
-  if(!ROWS.length&&!['manual','leitor','conta'].includes(TAB)){M.innerHTML=empty();return}
-  const V={painel,registos,leitor,manual,jornada,lei84,descansos,destinos,extras,alertas,fisc,exportar,conta,reljornada:relJornada};
+  if(!ROWS.length&&!['manual','leitor','conta','ferias'].includes(TAB)){M.innerHTML=empty();return}
+  const V={painel,registos,leitor,manual,jornada,lei84,descansos,destinos,extras,alertas,fisc,exportar,conta,ferias,reljornada:relJornada};
   M.innerHTML=`<section class="on ${TAB==='fisc'||TAB==='reljornada'?'print':''}" id="sec">${V[TAB]()}</section>`;
   bind();
 }
@@ -2104,6 +2115,95 @@ function descansos(){
 }
 
 /* ---- Destinos ---- */
+/* ============ FÉRIAS, LICENÇAS E BAIXAS ============ */
+const AUS_TIPOS=[['ferias','Férias','ok'],['baixa','Baixa médica','bad'],['parental','Licença parental','info'],['licenca','Licença (outra)','info'],['falta','Falta justificada','warn'],['outro','Outro','dim']];
+const ausTipo=t=>AUS_TIPOS.find(x=>x[0]===t)||AUS_TIPOS[AUS_TIPOS.length-1];
+let AUSD={id:'',tipo:'ferias',ini:'',fim:'',nota:''},AUSANO=String(new Date().getFullYear());
+const isoMais=(iso,n)=>{const d=new Date(iso+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return dISO(d)};
+const diaSem=iso=>new Date(iso+'T00:00:00Z').getUTCDay(); // 0 = domingo
+const diaUtil=iso=>{const w=diaSem(iso);return w>0&&w<6&&!FERIADOS.includes(iso)};
+function ausDiasDe(a){const out=[];if(!a.ini||!a.fim||a.fim<a.ini)return out;for(let d=a.ini;d<=a.fim&&out.length<800;d=isoMais(d,1))out.push(d);return out}
+/* mapa dia → tipo de ausência (um dia só conta uma vez) */
+function ausMapa(){const m={};for(const a of (S.aus||[]))for(const d of ausDiasDe(a))if(!m[d])m[d]=a.tipo;return m}
+/* dias de ausência dentro de uma semana (para a média de 4 meses do DL 84/2026) */
+function ausNaSemana(k,mapa,trab){let n=0;for(let i=0;i<7;i++){const d=isoMais(k,i);if(mapa[d]&&!(trab&&trab.has(d)))n++}return n} // dias com trabalho registado não contam como ausência
+const ausChipTxt=nd=>{const u=nd.filter(diaUtil).length;return `${nd.length} dia${nd.length>1?'s':''} · ${u} úte${u===1?'il':'is'}`};
+const nd_=n=>n+(Math.abs(n)===1?' dia':' dias');
+function ferias(){
+  const L_=S.aus||[],mapa=ausMapa(),dir=S.feriasDir??22;
+  const anos=[...new Set([String(new Date().getFullYear()),...L_.flatMap(a=>[a.ini.slice(0,4),a.fim.slice(0,4)])])].filter(Boolean).sort().reverse();
+  const doAno=Object.entries(mapa).filter(([d])=>d.startsWith(AUSANO));
+  const conta=(t,util)=>doAno.filter(([d,x])=>x===t&&(!util||diaUtil(d))).length;
+  const gozadas=conta('ferias',true),saldo=dir-gozadas;
+  const lic=conta('parental')+conta('licenca');
+  // por mês
+  const meses=[];for(let m=1;m<=12;m++){const k=AUSANO+'-'+pad(m);const ds=doAno.filter(([d])=>d.startsWith(k));
+    if(ds.length)meses.push({k,fer:ds.filter(([d,t])=>t==='ferias'&&diaUtil(d)).length,ferFds:ds.filter(([d,t])=>t==='ferias'&&!diaUtil(d)).length,
+      baixa:ds.filter(([,t])=>t==='baixa').length,lic:ds.filter(([,t])=>t==='parental'||t==='licenca').length,out:ds.filter(([,t])=>t==='falta'||t==='outro').length})}
+  const lista=L_.filter(a=>a.ini.startsWith(AUSANO)||a.fim.startsWith(AUSANO)).sort((a,b)=>b.ini.localeCompare(a.ini));
+  const trab=new Set(ROWS.map(r=>r.iso));
+  const linhas=lista.map(a=>{const ds=ausDiasDe(a),t=ausTipo(a.tipo),cf=ds.filter(d=>trab.has(d)).length;
+    return `<tr><td><span class="tag ${t[2]}">${t[1].toUpperCase()}</span></td><td>${dPT(a.ini)}</td><td>${dPT(a.fim)}</td>
+    <td class="t">${ds.length}</td><td class="t">${ds.filter(diaUtil).length}</td>
+    <td class="note" style="white-space:normal;max-width:240px">${esc(a.nota||'')}${cf?` <span class="tag warn">${cf} dia${cf>1?'s':''} com trabalho registado</span>`:''}</td>
+    <td class="noprint"><button class="btn aEd" data-id="${a.id}">✎ Editar</button> <button class="btn danger aDel" data-id="${a.id}" aria-label="Apagar">✕</button></td></tr>`}).join('');
+  const D=AUSD,nd=D.ini&&D.fim&&D.fim>=D.ini?ausDiasDe(D):[];
+  return `<div class="row" style="margin-top:0"><label class="note">Ano <select id="aAno">${anos.map(y=>`<option ${y===AUSANO?'selected':''}>${y}</option>`).join('')}</select></label></div>
+  <div class="kgrid">
+    ${kpi('Férias — direito',nd_(dir),'','dias úteis por ano')}
+    ${kpi('Férias gozadas',nd_(gozadas),gozadas?'':'','dias úteis em '+AUSANO)}
+    ${kpi('Saldo de férias',nd_(saldo),saldo<0?'bad':saldo<=3?'warn':'ok','por gozar')}
+    ${kpi('Baixa médica',nd_(conta('baixa')),conta('baixa')?'warn':'','dias seguidos')}
+    ${kpi('Licenças',nd_(lic),'','parental e outras')}
+    ${kpi('Faltas e outros',nd_(conta('falta')+conta('outro')))}</div>
+
+  <h2>${D.id?'Editar registo':'Novo registo'}</h2>
+  <div class="card">
+    <div class="row">
+      <label class="note">Tipo <select data-a="tipo">${AUS_TIPOS.map(([v,t])=>`<option value="${v}" ${D.tipo===v?'selected':''}>${t}</option>`).join('')}</select></label>
+      <label class="note">De <input type="date" data-a="ini" value="${esc(D.ini)}"></label>
+      <label class="note">Até <input type="date" data-a="fim" value="${esc(D.fim)}"></label>
+      <span class="chip" id="aChip" ${nd.length?'':'hidden'}>${ausChipTxt(nd)}</span>
+    </div>
+    <div class="row"><label class="note" style="flex:1">Nota <input class="obs" data-a="nota" value="${esc(D.nota)}" placeholder="ex.: n.º do certificado de incapacidade" style="width:100%"></label></div>
+    <div class="row"><button class="btn amber" id="aSave">${D.id?'Guardar alterações':'Guardar'}</button><button class="btn" id="aNew">Limpar</button></div>
+  </div>
+
+  <h2>Registos de ${AUSANO} (${lista.length})</h2>
+  ${lista.length?`<div class="tw"><table><tr><th>Tipo</th><th>De</th><th>Até</th><th>Dias</th><th>Úteis</th><th>Nota</th><th class="noprint"></th></tr>${linhas}</table></div>`
+    :'<div class="empty">Sem férias, licenças ou baixas neste ano.</div>'}
+
+  ${meses.length?`<h2>Por mês</h2><div class="tw"><table><tr><th>Mês</th><th>Férias (úteis)</th><th>Férias (fim de semana / feriado)</th><th>Baixa</th><th>Licenças</th><th>Faltas / outros</th></tr>
+    ${meses.map(m=>`<tr><td>${mesNome(m.k)}</td><td class="t">${m.fer||'—'}</td><td class="t">${m.ferFds||'—'}</td><td class="t">${m.baixa||'—'}</td><td class="t">${m.lic||'—'}</td><td class="t">${m.out||'—'}</td></tr>`).join('')}
+    <tr class="xtot"><td>Total</td><td class="t">${gozadas}</td><td class="t">${meses.reduce((s,m)=>s+m.ferFds,0)}</td><td class="t">${conta('baixa')}</td><td class="t">${lic}</td><td class="t">${conta('falta')+conta('outro')}</td></tr></table></div>`:''}
+
+  <h2>Direito anual</h2>
+  <div class="card"><div class="row" style="margin:0"><label class="note">Dias úteis de férias por ano <input class="mini" id="aDir" value="${dir}" inputmode="numeric"></label>
+    <button class="btn" id="aDirG">Guardar</button></div></div>`;
+}
+function feriasBind(){
+  const an=$('#aAno');if(!an)return;
+  an.onchange=e=>{AUSANO=e.target.value;render()};
+  const chip=()=>{const c=$('#aChip');if(!c)return;const nd=AUSD.ini&&AUSD.fim&&AUSD.fim>=AUSD.ini?ausDiasDe(AUSD):[];c.hidden=!nd.length;c.textContent=nd.length?ausChipTxt(nd):''};
+  document.querySelectorAll('[data-a]').forEach(el=>el.oninput=el.onchange=e=>{AUSD[el.dataset.a]=e.target.value;
+    if(el.dataset.a==='ini'&&AUSD.ini&&(!AUSD.fim||AUSD.fim<AUSD.ini)){AUSD.fim=AUSD.ini;const f=document.querySelector('[data-a=fim]');if(f)f.value=AUSD.fim}
+    chip()});
+  $('#aNew').onclick=()=>{AUSD={id:'',tipo:'ferias',ini:'',fim:'',nota:''};render()};
+  $('#aSave').onclick=()=>{
+    const D=AUSD;if(!D.ini||!D.fim){alert('Indica as datas de início e de fim.');return}
+    if(D.fim<D.ini){alert('A data de fim é anterior à de início.');return}
+    const sob=(S.aus||[]).find(a=>a.id!==D.id&&a.ini<=D.fim&&a.fim>=D.ini);
+    if(sob&&!confirm(`Este período sobrepõe-se a ${ausTipo(sob.tipo)[1].toLowerCase()} de ${dPT(sob.ini)} a ${dPT(sob.fim)}. Guardar na mesma?`))return;
+    S.aus=S.aus||[];
+    const reg={id:D.id||('a'+Date.now().toString(36)),tipo:D.tipo,ini:D.ini,fim:D.fim,nota:D.nota||''};
+    const i=S.aus.findIndex(a=>a.id===reg.id);if(i>=0)S.aus[i]=reg;else S.aus.push(reg);
+    AUSANO=reg.ini.slice(0,4);AUSD={id:'',tipo:reg.tipo,ini:'',fim:'',nota:''};save();rebuild();
+  };
+  document.querySelectorAll('.aEd').forEach(b=>b.onclick=()=>{const a=(S.aus||[]).find(x=>x.id===b.dataset.id);if(a){AUSD={...a};render();scrollTo(0,0)}});
+  document.querySelectorAll('.aDel').forEach(b=>b.onclick=()=>{const a=(S.aus||[]).find(x=>x.id===b.dataset.id);
+    if(a&&confirm(`Apagar ${ausTipo(a.tipo)[1].toLowerCase()} de ${dPT(a.ini)} a ${dPT(a.fim)}?`)){S.aus=S.aus.filter(x=>x.id!==a.id);if(AUSD.id===a.id)AUSD={id:'',tipo:'ferias',ini:'',fim:'',nota:''};save();rebuild()}});
+  $('#aDirG').onclick=()=>{const v=parseInt($('#aDir').value,10);if(!(v>=0&&v<=60)){alert('Escreve um número de dias entre 0 e 60.');return}S.feriasDir=v;save();render()};
+}
 function destinos(){
   const agg=S.dest.map(([nome,kw])=>{
     const rs=ROWS.filter(r=>r.obs.toLowerCase().includes(kw.toLowerCase()));
@@ -2571,6 +2671,7 @@ function download(name,blob){
 if(AND&&AND.imprimir&&typeof window!=='undefined')window.print=()=>{try{AND.imprimir()}catch(e){}};
 function bind(){
   fotosBind();
+  feriasBind();
   document.querySelectorAll('#fMes,#fSem').forEach(el=>el.onchange=e=>{if(e.target.id==='fMes'){fMes=e.target.value;fSem=''}else{fSem=e.target.value;fMes=''}render()});
   document.querySelectorAll('.eEsp').forEach(el=>el.onchange=e=>{S.espera[e.target.dataset.d]=parseHM(e.target.value);save();rebuild()});
   document.querySelectorAll('.eKm').forEach(el=>el.onchange=e=>{S.km[e.target.dataset.d]=+e.target.value||0;save();rebuild()});
