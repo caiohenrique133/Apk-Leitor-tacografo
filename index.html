@@ -175,6 +175,16 @@ td .chk{width:16px;height:16px;accent-color:var(--amber)}
 .xfiltro .btn .mono{font-size:12px;opacity:.75;margin-left:2px}
 tr.xtot td{font-weight:700;border-top:2px solid var(--ink);background:var(--panel2)}
 /* pasta no telemóvel */
+.prox{border:2px solid var(--amber);padding:18px 20px;margin-top:0}
+.prox.ok{border-color:var(--ok)}
+.prox.bad{border-color:var(--bad)}
+.prox-lbl{font-size:11.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.prox-h{font-family:var(--cond);font-weight:700;font-size:40px;line-height:1.05;margin:4px 0 8px}
+.prox .tag{margin-right:6px}
+.prox-dados{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 18px;margin:14px 0 8px;padding-top:12px;border-top:1px dashed var(--line)}
+.prox-dados span{display:block;font-size:11.5px;color:var(--dim)}
+.prox-dados b{font-family:var(--mono);font-weight:600;font-size:14px}
+td.turno{font-weight:600}
 .pasta{font-family:var(--mono);font-size:13px;line-height:1.9;margin:2px 0 6px;padding:10px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}
 .pasta-raiz{font-weight:600}
 .pasta>div:not(.pasta-raiz){padding-left:22px}
@@ -300,7 +310,7 @@ tr.xtot td{font-weight:700;border-top:2px solid var(--ink);background:var(--pane
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v3.1 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v3.2 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1376,6 +1386,42 @@ function render(){
 }
 
 /* ---- Painel ---- */
+/* ---- Quando posso voltar a trabalhar: fim do último turno + descanso mínimo (lógica das 24h, art. 8.º) ----
+   · até 3 descansos reduzidos entre dois semanais → mínimo 9h (conta como reduzido)
+   · com os 3 reduzidos já gastos → mínimo 11h (regular)
+   · o descanso tem de ficar completo dentro das 24h contadas desde o início do turno */
+function proximoTurno(){
+  if(!ROWS.length)return null;
+  const A=ROWS[ROWS.length-1],R=RESTS[RESTS.length-1];
+  const usados=R?(R.weekly?0:R.red):0;
+  const min=usados>=3?11*60:9*60;
+  const pode=A.en+min,regular=A.en+11*60,jan=A.st+1440,amp=A.en-A.st;
+  return {A,usados,min,pode,regular,jan,amp,cabe:pode<=jan,cabeReg:regular<=jan,agora:Math.floor(Date.now()/60000)};
+}
+const dtHora=abs=>{const d=new Date(L(abs)*60000);return dPT(dISO(d))+' · '+clk(L(abs))};
+function proximoHTML(){
+  const P=proximoTurno();if(!P)return '';
+  const falta=P.pode-P.agora,ja=falta<=0;
+  const conta=ja?'Já pode iniciar um novo turno':`Faltam ${hm(falta)}`;
+  return `<div class="card prox ${ja?'ok':''} ${P.cabe?'':'bad'}">
+    <div class="prox-top"><div>
+      <div class="prox-lbl">Posso voltar a trabalhar a partir de</div>
+      <div class="prox-h">${dtHora(P.pode)}</div>
+      <span class="tag ${ja?'ok':'warn'}">${conta}</span>
+      <span class="tag ${P.min===9*60?'info':'dim'}">${P.min===9*60?'Descanso reduzido · 9h':'Descanso regular · 11h'}</span>
+    </div></div>
+    <div class="prox-dados">
+      <div><span>Fim do último turno</span><b>${dtHora(P.A.en)}</b></div>
+      <div><span>Turno (início → fim)</span><b>${clk(L(P.A.st))} → ${clk(L(P.A.en))} · ${hm(P.amp)}</b></div>
+      <div><span>Reduzidos desde o último semanal</span><b>${P.usados} de 3</b></div>
+      ${P.min===9*60?`<div><span>Com descanso regular (11h)</span><b>${dtHora(P.regular)}</b></div>`:''}
+      <div><span>Fim das 24h do turno</span><b>${dtHora(P.jan)}</b></div>
+    </div>
+    ${P.cabe?(P.min===9*60&&!P.cabeReg?`<div class="note">Com ${hm(P.amp)} de turno, as 11h já não cabem nas 24h: só o descanso reduzido de 9h.</div>`:'')
+      :`<div class="alert MAXIMA" style="margin-bottom:0"><span class="g">ATENÇÃO</span> · Com ${hm(P.amp)} de turno, nem ${hm(P.min)} de descanso cabem nas 24h (art. 8.º/2).</div>`}
+    ${P.min===9*60?`<div class="note">Se descansar só 9h, gasta o reduzido n.º ${P.usados+1} de 3.</div>`:'<div class="note">Os 3 descansos reduzidos já foram usados: até ao próximo descanso semanal, o mínimo é 11h.</div>'}
+  </div>`;
+}
 function painel(){
   const T=ROWS.reduce((s,r)=>({j:s.j+r.jornada,c:s.c+r.cond,km:s.km+r.km}),{j:0,c:0,km:0});
   const gt9=ROWS.filter(r=>r.cond>9*60&&r.cond<=10*60).length, gt10=ROWS.filter(r=>r.cond>10*60).length;
@@ -1384,7 +1430,7 @@ function painel(){
   const fdsH=ROWS.filter(r=>r.dia==='SÁB'||r.dia==='DOM').reduce((s,r)=>s+r.jornada,0);
   const X=extraRows();const totE=X.reduce((s,x)=>s+(+x.valor||0),0),porR=X.filter(x=>x.pago!=='Sim').reduce((s,x)=>s+(+x.valor||0),0);
   const mrows=Object.entries(MONTHS).map(([k,m])=>`<tr><td>${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][+k.slice(5,7)-1]} ${k.slice(0,4)}</td><td class="t">${m.dias}</td><td class="t">${hm(m.jorn)}</td><td class="t">${hm(m.cond)}</td><td class="t">${hm(m.ot)}</td><td class="t">${hm(m.disp)}</td><td class="t">${hm(m.esp)}</td><td class="t">${hm(m.pausa)}</td><td class="t">${m.km}</td><td class="t">${hm(m.jorn/m.dias)}</td><td class="t">${m.fds}</td></tr>`).join('');
-  return `<div class="kgrid">
+  return `${proximoHTML()}<div class="kgrid">
     ${kpi('Dias trabalhados',ROWS.length)}${kpi('Horas totais',hm(T.j))}
     ${kpi('Média horas/dia',hm(T.j/ROWS.length))}${kpi('KM totais',T.km)}
     ${kpi('Média KM/dia',Math.round(T.km/ROWS.length))}${kpi('% Condução',(T.c/T.j*100).toFixed(1)+'%')}</div>
@@ -1402,9 +1448,12 @@ function painel(){
 
 /* ---- Registos (DADOS) ---- */
 function registos(){
-  const rows=fRows().map(r=>`<tr>
+  const FR=fRows();
+  const sm=k=>FR.reduce((a,r)=>a+(typeof k==='function'?k(r):(r[k]||0)),0);
+  const rows=FR.map(r=>`<tr>
     <td>${dPT(r.iso)}<div class="note">${r.dia}${r.extra?' · <span class="tag warn">EXTRA</span>':''}${r.man?' · <span class="tag info">DISCO</span>':''}</div></td>
     <td class="t">${clk(r.stl)}</td><td class="t">${clk(r.enl)}</td>
+    <td class="t turno">${hm(r.en-r.st)}</td>
     <td class="t"><b>${hm(r.trabalho+r.esp)}</b></td>
     <td class="t">${hm(r.cond)}</td><td class="t">${hm(r.ot)}</td><td class="t">${hm(r.disp)}</td>
     <td class="t"><input class="mini eEsp" data-d="${r.iso}" value="${r.esp?hm(r.esp):''}" placeholder="0:00" aria-label="Espera doc."></td>
@@ -1415,7 +1464,11 @@ function registos(){
     <td><input type="checkbox" class="chk eExt" data-d="${r.iso}" ${r.extra?'checked':''} aria-label="Extra"></td></tr>`).join('');
   return `<div class="row">${selMes()}</div>
   <div class="legend"><span><i style="background:var(--drive)"></i>Condução</span><span><i style="background:var(--work)"></i>Outros trabalhos</span><span><i style="background:var(--avail)"></i>Disponibilidade</span><span><i style="background:var(--s-pausa)"></i>Pausa</span></div>
-  <div class="tw"><table><tr><th>Data</th><th>Início</th><th>Fim</th><th>Total</th><th>Condução</th><th>Outros</th><th>Disp.</th><th>Espera Doc.</th><th>Pausa</th><th>KM</th><th>Dia 00–24h</th><th>Observações</th><th>Extra</th></tr>${rows}</table></div>`;
+  <div class="tw"><table><tr><th>Data</th><th>Início</th><th>Fim</th><th>Turno</th><th>Total</th><th>Condução</th><th>Outros</th><th>Disp.</th><th>Espera Doc.</th><th>Pausa</th><th>KM</th><th>Dia 00–24h</th><th>Observações</th><th>Extra</th></tr>${rows}
+    ${FR.length?`<tr class="xtot"><td>Total · ${FR.length} dia${FR.length>1?'s':''}</td><td></td><td></td>
+      <td class="t">${hm(sm(r=>r.en-r.st))}</td><td class="t">${hm(sm(r=>r.trabalho+r.esp))}</td>
+      <td class="t">${hm(sm('cond'))}</td><td class="t">${hm(sm('ot'))}</td><td class="t">${hm(sm('disp'))}</td>
+      <td class="t">${hm(sm('esp'))}</td><td class="t">${hm(sm('pausa'))}</td><td class="t">${sm('km')}</td><td colspan="3"></td></tr>`:''}</table></div>`;
 }
 
 /* ---- Leitor de cartão ---- */
