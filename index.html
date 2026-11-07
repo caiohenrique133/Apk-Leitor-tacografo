@@ -186,6 +186,13 @@ tr.xtot td{font-weight:700;border-top:2px solid var(--ink);background:var(--pane
 .prox-dados b{font-family:var(--mono);font-weight:600;font-size:14px}
 td.turno{font-weight:600}
 .chip[hidden]{display:none}
+/* férias vs licenças: cor à esquerda de cada linha */
+tr.aus-fer td:first-child{box-shadow:inset 4px 0 0 var(--ok)}
+tr.aus-lic td:first-child{box-shadow:inset 4px 0 0 var(--info)}
+tr.aus-bx td:first-child{box-shadow:inset 4px 0 0 var(--bad)}
+tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
+.asel{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:2px solid var(--amber);padding:10px 14px;margin:0 0 10px}
+.asel .btn{margin-left:auto}
 .pasta{font-family:var(--mono);font-size:13px;line-height:1.9;margin:2px 0 6px;padding:10px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}
 .pasta-raiz{font-weight:600}
 .pasta>div:not(.pasta-raiz){padding-left:22px}
@@ -311,7 +318,7 @@ td.turno{font-weight:600}
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v3.3 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v3.4 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -2118,7 +2125,10 @@ function descansos(){
 /* ============ FÉRIAS, LICENÇAS E BAIXAS ============ */
 const AUS_TIPOS=[['ferias','Férias','ok'],['baixa','Baixa médica','bad'],['parental','Licença parental','info'],['licenca','Licença (outra)','info'],['falta','Falta justificada','warn'],['outro','Outro','dim']];
 const ausTipo=t=>AUS_TIPOS.find(x=>x[0]===t)||AUS_TIPOS[AUS_TIPOS.length-1];
-let AUSD={id:'',tipo:'ferias',ini:'',fim:'',nota:''},AUSANO=String(new Date().getFullYear());
+let AUSD={id:'',tipo:'ferias',ini:'',fim:'',nota:''},AUSANO=String(new Date().getFullYear()),AUSF='',AUSSEL=new Set();
+/* grupos para separar férias de licenças: filtro e somas */
+const AUS_GRUPOS=[['','Todos',()=>true],['ferias','Férias',t=>t==='ferias'],['lic','Licenças',t=>t==='parental'||t==='licenca'],['baixa','Baixas',t=>t==='baixa'],['outros','Faltas e outros',t=>t==='falta'||t==='outro']];
+const ausGrupo=g=>AUS_GRUPOS.find(x=>x[0]===g)||AUS_GRUPOS[0];
 const isoMais=(iso,n)=>{const d=new Date(iso+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return dISO(d)};
 const diaSem=iso=>new Date(iso+'T00:00:00Z').getUTCDay(); // 0 = domingo
 const diaUtil=iso=>{const w=diaSem(iso);return w>0&&w<6&&!FERIADOS.includes(iso)};
@@ -2140,22 +2150,34 @@ function ferias(){
   const meses=[];for(let m=1;m<=12;m++){const k=AUSANO+'-'+pad(m);const ds=doAno.filter(([d])=>d.startsWith(k));
     if(ds.length)meses.push({k,fer:ds.filter(([d,t])=>t==='ferias'&&diaUtil(d)).length,ferFds:ds.filter(([d,t])=>t==='ferias'&&!diaUtil(d)).length,
       baixa:ds.filter(([,t])=>t==='baixa').length,lic:ds.filter(([,t])=>t==='parental'||t==='licenca').length,out:ds.filter(([,t])=>t==='falta'||t==='outro').length})}
-  const lista=L_.filter(a=>a.ini.startsWith(AUSANO)||a.fim.startsWith(AUSANO)).sort((a,b)=>b.ini.localeCompare(a.ini));
+  const doAnoL=L_.filter(a=>a.ini.startsWith(AUSANO)||a.fim.startsWith(AUSANO)).sort((a,b)=>b.ini.localeCompare(a.ini));
+  const lista=doAnoL.filter(a=>ausGrupo(AUSF)[2](a.tipo));
   const trab=new Set(ROWS.map(r=>r.iso));
+  // somas: dias corridos e úteis da lista filtrada e da seleção
+  const soma=ls=>ls.reduce((o,a)=>{const ds=ausDiasDe(a);o.n++;o.dias+=ds.length;o.uteis+=ds.filter(diaUtil).length;return o},{n:0,dias:0,uteis:0});
+  for(const id of [...AUSSEL])if(!L_.some(a=>a.id===id))AUSSEL.delete(id);
+  const T=soma(lista),SEL=soma(L_.filter(a=>AUSSEL.has(a.id)));
+  const filtro=`<div class="row xfiltro" role="group" aria-label="Filtrar por tipo">${AUS_GRUPOS.map(([v,t,f])=>{const n=doAnoL.filter(a=>f(a.tipo)).length;
+    return `<button class="btn ${AUSF===v?'amber':''} aF" data-f="${v}" aria-pressed="${AUSF===v}">${t} <span class="mono">${n}</span></button>`}).join('')}</div>`;
+  const todosSel=lista.length&&lista.every(a=>AUSSEL.has(a.id));
   const linhas=lista.map(a=>{const ds=ausDiasDe(a),t=ausTipo(a.tipo),cf=ds.filter(d=>trab.has(d)).length;
-    return `<tr><td><span class="tag ${t[2]}">${t[1].toUpperCase()}</span></td><td>${dPT(a.ini)}</td><td>${dPT(a.fim)}</td>
+    return `<tr class="aus-${a.tipo==='ferias'?'fer':a.tipo==='baixa'?'bx':a.tipo==='falta'||a.tipo==='outro'?'out':'lic'}"><td class="noprint"><input type="checkbox" class="chk aSel" data-id="${a.id}" ${AUSSEL.has(a.id)?'checked':''} aria-label="Somar este registo"></td><td><span class="tag ${t[2]}">${t[1].toUpperCase()}</span></td><td>${dPT(a.ini)}</td><td>${dPT(a.fim)}</td>
     <td class="t">${ds.length}</td><td class="t">${ds.filter(diaUtil).length}</td>
     <td class="note" style="white-space:normal;max-width:240px">${esc(a.nota||'')}${cf?` <span class="tag warn">${cf} dia${cf>1?'s':''} com trabalho registado</span>`:''}</td>
     <td class="noprint"><button class="btn aEd" data-id="${a.id}">✎ Editar</button> <button class="btn danger aDel" data-id="${a.id}" aria-label="Apagar">✕</button></td></tr>`}).join('');
   const D=AUSD,nd=D.ini&&D.fim&&D.fim>=D.ini?ausDiasDe(D):[];
   return `<div class="row" style="margin-top:0"><label class="note">Ano <select id="aAno">${anos.map(y=>`<option ${y===AUSANO?'selected':''}>${y}</option>`).join('')}</select></label></div>
+  <h2>Férias</h2>
   <div class="kgrid">
-    ${kpi('Férias — direito',nd_(dir),'','dias úteis por ano')}
-    ${kpi('Férias gozadas',nd_(gozadas),gozadas?'':'','dias úteis em '+AUSANO)}
-    ${kpi('Saldo de férias',nd_(saldo),saldo<0?'bad':saldo<=3?'warn':'ok','por gozar')}
-    ${kpi('Baixa médica',nd_(conta('baixa')),conta('baixa')?'warn':'','dias seguidos')}
+    ${kpi('Direito',nd_(dir),'','dias úteis por ano')}
+    ${kpi('Gozadas',nd_(gozadas),gozadas?'':'','dias úteis em '+AUSANO)}
+    ${kpi('Saldo',nd_(saldo),saldo<0?'bad':saldo<=3?'warn':'ok','por gozar')}</div>
+  <h2>Licenças e baixas</h2>
+  <div class="kgrid">
     ${kpi('Licenças',nd_(lic),'','parental e outras')}
-    ${kpi('Faltas e outros',nd_(conta('falta')+conta('outro')))}</div>
+    ${kpi('Baixa médica',nd_(conta('baixa')),conta('baixa')?'warn':'','dias seguidos')}
+    ${kpi('Faltas e outros',nd_(conta('falta')+conta('outro')))}
+    ${kpi('Total de ausências',nd_(doAno.length),'','em '+AUSANO)}</div>
 
   <h2>${D.id?'Editar registo':'Novo registo'}</h2>
   <div class="card">
@@ -2169,9 +2191,13 @@ function ferias(){
     <div class="row"><button class="btn amber" id="aSave">${D.id?'Guardar alterações':'Guardar'}</button><button class="btn" id="aNew">Limpar</button></div>
   </div>
 
-  <h2>Registos de ${AUSANO} (${lista.length})</h2>
-  ${lista.length?`<div class="tw"><table><tr><th>Tipo</th><th>De</th><th>Até</th><th>Dias</th><th>Úteis</th><th>Nota</th><th class="noprint"></th></tr>${linhas}</table></div>`
-    :'<div class="empty">Sem férias, licenças ou baixas neste ano.</div>'}
+  <h2>Registos de ${AUSANO}</h2>
+  ${filtro}
+  ${AUSSEL.size?`<div class="card asel"><b>Soma da seleção</b> · ${SEL.n} registo${SEL.n>1?'s':''} · <b>${nd_(SEL.dias)}</b> · <b>${SEL.uteis} úte${SEL.uteis===1?'il':'is'}</b>
+    <button class="btn" id="aSelLimpa">Limpar seleção</button></div>`:''}
+  ${lista.length?`<div class="tw"><table><tr><th class="noprint"><input type="checkbox" class="chk" id="aSelTodos" ${todosSel?'checked':''} aria-label="Selecionar todos para somar" title="Somar todos"></th><th>Tipo</th><th>De</th><th>Até</th><th>Dias</th><th>Úteis</th><th>Nota</th><th class="noprint"></th></tr>${linhas}
+    <tr class="xtot"><td class="noprint"></td><td colspan="3">Total ${AUSF?ausGrupo(AUSF)[1].toLowerCase():''} · ${T.n} registo${T.n>1?'s':''}</td><td class="t">${T.dias}</td><td class="t">${T.uteis}</td><td colspan="2"></td></tr></table></div>`
+    :`<div class="empty">${AUSF?'Sem registos deste tipo em '+AUSANO+'.':'Sem férias, licenças ou baixas neste ano.'}</div>`}
 
   ${meses.length?`<h2>Por mês</h2><div class="tw"><table><tr><th>Mês</th><th>Férias (úteis)</th><th>Férias (fim de semana / feriado)</th><th>Baixa</th><th>Licenças</th><th>Faltas / outros</th></tr>
     ${meses.map(m=>`<tr><td>${mesNome(m.k)}</td><td class="t">${m.fer||'—'}</td><td class="t">${m.ferFds||'—'}</td><td class="t">${m.baixa||'—'}</td><td class="t">${m.lic||'—'}</td><td class="t">${m.out||'—'}</td></tr>`).join('')}
@@ -2188,6 +2214,10 @@ function feriasBind(){
   document.querySelectorAll('[data-a]').forEach(el=>el.oninput=el.onchange=e=>{AUSD[el.dataset.a]=e.target.value;
     if(el.dataset.a==='ini'&&AUSD.ini&&(!AUSD.fim||AUSD.fim<AUSD.ini)){AUSD.fim=AUSD.ini;const f=document.querySelector('[data-a=fim]');if(f)f.value=AUSD.fim}
     chip()});
+  document.querySelectorAll('.aF').forEach(b=>b.onclick=()=>{AUSF=b.dataset.f;render()});
+  document.querySelectorAll('.aSel').forEach(c=>c.onchange=()=>{c.checked?AUSSEL.add(c.dataset.id):AUSSEL.delete(c.dataset.id);render()});
+  const st=$('#aSelTodos');if(st)st.onchange=()=>{document.querySelectorAll('.aSel').forEach(c=>st.checked?AUSSEL.add(c.dataset.id):AUSSEL.delete(c.dataset.id));render()};
+  const sl=$('#aSelLimpa');if(sl)sl.onclick=()=>{AUSSEL.clear();render()};
   $('#aNew').onclick=()=>{AUSD={id:'',tipo:'ferias',ini:'',fim:'',nota:''};render()};
   $('#aSave').onclick=()=>{
     const D=AUSD;if(!D.ini||!D.fim){alert('Indica as datas de início e de fim.');return}
