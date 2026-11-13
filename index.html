@@ -318,7 +318,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v3.5 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v3.6 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -2624,6 +2624,10 @@ async function emailAnexo(tipo,mes){
     return {nome:f.nome,blob:new Blob([f.ab],{type:'application/octet-stream'}),sub:'DDD'}}
   return {nome:'backup_tacografo_'+hojeLocal()+'.json',blob:new Blob([JSON.stringify(estadoLocal(),null,1)],{type:'application/json'}),sub:'Backups'};
 }
+function emailAtualizar(){
+  const url='https://github.com/caiohenrique133/Apk-Leitor-tacografo/releases/latest/download/Tacografo.apk';
+  if(confirm('Esta versão da app ainda não consegue pôr o ficheiro em anexo.\n\nQueres descarregar a versão nova da app? Instala-a por cima da atual — os dados ficam.'))location.href=url;
+}
 function emailHTML(){
   const ms=[...new Set(ROWS.map(r=>r.iso.slice(0,7)))].reverse();
   return `<div class="card" id="emailCard"><h2 style="margin-top:0">Enviar por e-mail</h2>
@@ -2637,6 +2641,20 @@ function emailHTML(){
     <div class="row"><button class="btn amber" id="mEnviar">✉ Enviar por e-mail</button></div>
     ${EMSG?`<div class="note" aria-live="polite">${esc(EMSG)}</div>`:''}</div>`;
 }
+/* e-mail pronto a enviar (.eml) com o ficheiro já em anexo — abre como rascunho no Outlook, Apple Mail ou Thunderbird */
+async function emailEml(para,assunto,texto,a){
+  const b64u=t=>btoa(unescape(encodeURIComponent(t)));
+  const dobra=x=>x.replace(/.{1,76}/g,'$&\r\n');
+  const fronteira='----tacografo'+Date.now().toString(36);
+  const mime=(a.blob.type||'application/octet-stream')+(/^text\/|json/.test(a.blob.type)&&!/charset/.test(a.blob.type)?'; charset=UTF-8':'');
+  const eml=['To: '+para,'Subject: =?UTF-8?B?'+b64u(assunto)+'?=','X-Unsent: 1','MIME-Version: 1.0',
+    'Content-Type: multipart/mixed; boundary="'+fronteira+'"','','--'+fronteira,
+    'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',dobra(b64u(texto)),
+    '--'+fronteira,`Content-Type: ${mime}; name="${a.nome}"`,`Content-Disposition: attachment; filename="${a.nome}"`,'Content-Transfer-Encoding: base64','',
+    dobra(await blobB64(a.blob)),'--'+fronteira+'--',''].join('\r\n');
+  return new Blob([eml],{type:'message/rfc822'});
+}
+const ehTelemovel=()=>/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 async function emailEnviar(btn){
   const para=$('#mPara').value.trim(),tipo=$('#mTipo').value,mes=$('#mMes').value;EMMES=mes;
   if(para&&!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+([,; ]+[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+)*$/.test(para)){alert('O endereço de e-mail não parece estar certo.');return}
@@ -2648,13 +2666,21 @@ async function emailEnviar(btn){
     // 1) app Android: escolha da app de e-mail com o anexo
     if(AND&&AND.enviarEmail){const r=String(AND.enviarEmail(a.sub,a.nome,await blobB64(a.blob),para,assunto,R.txt));
       if(r==='ok'){EMSG='Escolhe a app de e-mail (Gmail, Outlook…). O ficheiro vai em anexo: '+a.nome;return}}
+    // app Android antiga: sem envio com anexo — pede para atualizar em vez de abrir um e-mail vazio
+    if(AND&&!AND.enviarEmail){EMSG='';emailAtualizar();return}
     // 2) telemóvel no browser: partilhar o ficheiro
     const f=new File([a.blob],a.nome,{type:a.blob.type||'application/octet-stream'});
     if(navigator.canShare&&navigator.canShare({files:[f]})){
       try{await navigator.share({files:[f],title:assunto,text:R.txt});EMSG='Escolhe a app de e-mail para enviar '+a.nome+'.';return}
       catch(e){if(e&&e.name==='AbortError'){EMSG='Envio cancelado.';return}}
     }
-    // 3) restantes: descarrega o ficheiro e abre o e-mail já preenchido
+    // 3) computador: e-mail pronto (.eml) com o anexo
+    if(!ehTelemovel()){
+      const eml=await emailEml(para,assunto,R.txt,a),nomeE='Email_'+a.nome.replace(/\.[^.]+$/,'')+'.eml';
+      const l=document.createElement('a');l.href=URL.createObjectURL(eml);l.download=nomeE;document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(l.href),5000);
+      EMSG='Foi descarregado '+nomeE+'. Abre-o: o e-mail aparece pronto, com '+a.nome+' em anexo (Outlook, Apple Mail ou Thunderbird). No Gmail no browser, anexa o ficheiro à mão.';return;
+    }
+    // 4) telemóvel sem partilha deste tipo de ficheiro: descarrega e abre o e-mail preenchido
     download(a.nome,a.blob);
     location.href=`mailto:${encodeURIComponent(para)}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(R.txt+'\n\n(Anexa o ficheiro descarregado: '+a.nome+')')}`;
     EMSG='O ficheiro '+a.nome+' foi descarregado. No e-mail que abriu, anexa-o antes de enviar.';
