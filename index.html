@@ -318,7 +318,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v3.6 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v3.7 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -2253,16 +2253,52 @@ function extraRows(){
     return {iso:r.iso,dia:r.dia,tipo,obs:r.obs,h:r.jornada,km:r.km,valor:m.valor||'',pago:m.pago||'Não',notas:m.notas||''};
   });
 }
-let XPAG=''; // filtro da aba Extras: '' todos · 'sim' pagos · 'nao' não pagos
+let XPAG='',XMES=''; // filtros da aba Extras: pagamento ('' todos · 'sim' pagos · 'nao' não pagos) e mês
+const xValor=x=>parseFloat(String(x.valor||'').replace(',','.'))||0;
+const xFiltra=X=>X.filter(x=>(!XMES||x.iso.slice(0,7)===XMES)&&(XPAG===''||(XPAG==='sim'?x.pago==='Sim':x.pago!=='Sim')));
+/* relatório Excel dos extras: folha EXTRAS (com os filtros escolhidos) + RESUMO POR MÊS */
+async function extrasExcel(btn){
+  const V=xFiltra(extraRows());if(!V.length){alert('Não há dias extra com estes filtros.');return}
+  btn.disabled=true;
+  try{await carregaXLSX()}catch(e){btn.disabled=false;alert('Sem ligação para carregar a biblioteca Excel. Tenta outra vez com internet.');return}
+  try{
+    const tot=V.reduce((s,x)=>s+xValor(x),0),por=V.filter(x=>x.pago!=='Sim').reduce((s,x)=>s+xValor(x),0);
+    const fPag=XPAG==='sim'?'só pagos':XPAG==='nao'?'só não pagos':'pagos e não pagos';
+    const R={mes:XMES,ini:V[V.length-1].iso<V[0].iso?V[V.length-1].iso:V[0].iso,fim:V[V.length-1].iso>V[0].iso?V[V.length-1].iso:V[0].iso};
+    const ord=V.slice().sort((a,b)=>a.iso.localeCompare(b.iso));
+    const F={titulo:'EXTRAS — DIAS EXTRA, FINS DE SEMANA E FERIADOS',sub:'Dias marcados como Extra nos Registos e dias trabalhados a sábado, domingo ou feriado · '+fPag+'.',
+      kpis:[['Total registado (€)',tot,'eur'],['Por receber (€)',por,'eur'],['Recebido (€)',tot-por,'eur'],['Dias extra',V.length,'n'],['Horas em dias extra',V.reduce((s,x)=>s+x.h,0),'h']],
+      seccao:'TABELA DE EXTRAS',
+      cab:['Data','Dia','Tipo','Observações','Horas','KM','Valor (€)','Pago?','Notas'],
+      tipos:['d','s','s','s','h','n','eur','e','s'],
+      linhas:ord.map(x=>({v:[x.iso,x.dia,x.tipo,x.obs,x.h,x.km||0,xValor(x),x.pago==='Sim'?'Sim':'Não',x.notas]})),
+      total:['TOTAL','','','',V.reduce((s,x)=>s+x.h,0),V.reduce((s,x)=>s+(x.km||0),0),tot,'','']};
+    // resumo por mês
+    const meses={};for(const x of ord){const m=x.iso.slice(0,7);const o=meses[m]=meses[m]||{d:0,h:0,v:0,p:0};o.d++;o.h+=x.h;o.v+=xValor(x);if(x.pago==='Sim')o.p+=xValor(x)}
+    const M={titulo:'EXTRAS — RESUMO POR MÊS',sub:'Totais de cada mês ('+fPag+').',kpis:[],seccao:'RESUMO MENSAL',
+      cab:['Mês','Dias','Horas','Valor (€)','Recebido (€)','Por receber (€)','Estado'],
+      tipos:['m','n','h','eur','eur','eur','e'],
+      linhas:Object.entries(meses).map(([m,o])=>({v:[m,o.d,o.h,o.v,o.p,o.v-o.p,o.v-o.p>0.005?'POR RECEBER':'OK']})),
+      total:['TOTAL',V.length,V.reduce((s,x)=>s+x.h,0),tot,tot-por,por,'']};
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,xFolhaPadrao(F,R,[2,13,8,12,60,10,8,12,9,30,14]),'EXTRAS');
+    XLSX.utils.book_append_sheet(wb,xFolhaPadrao(M,R,[2,16,8,10,14,14,16,16]),'RESUMO POR MÊS');
+    const nome='Extras_'+(XMES||(R.ini+'_a_'+R.fim))+(XPAG==='sim'?'_pagos':XPAG==='nao'?'_nao_pagos':'')+'.xlsx';
+    download(nome,new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  }finally{btn.disabled=false}
+}
 function extras(){
   const X=extraRows();
   const tot=X.reduce((s,x)=>s+(+x.valor||0),0),por=X.filter(x=>x.pago!=='Sim').reduce((s,x)=>s+(+x.valor||0),0);
   const nPag=X.filter(x=>x.pago==='Sim').length;
-  const V=X.filter(x=>XPAG===''||(XPAG==='sim'?x.pago==='Sim':x.pago!=='Sim'));
+  const V=xFiltra(X);
+  const msX=[...new Set(X.map(x=>x.iso.slice(0,7)))].sort().reverse();
   const vTot=V.reduce((s,x)=>s+(+x.valor||0),0);
   const filtro=`<div class="row xfiltro" role="group" aria-label="Filtrar por pagamento">
     ${[['','Todos',X.length],['sim','Pagos',nPag],['nao','Não pagos',X.length-nPag]].map(([v,t,n])=>
-      `<button class="btn ${XPAG===v?'amber':''} xF" data-f="${v}" aria-pressed="${XPAG===v}">${t} <span class="mono">${n}</span></button>`).join('')}</div>`;
+      `<button class="btn ${XPAG===v?'amber':''} xF" data-f="${v}" aria-pressed="${XPAG===v}">${t} <span class="mono">${n}</span></button>`).join('')}
+    <select id="xMes" aria-label="Mês"><option value="">Todos os meses</option>${msX.map(m=>`<option value="${m}" ${XMES===m?'selected':''}>${mesNome(m)}</option>`).join('')}</select>
+    <button class="btn amber" id="xXlsx" style="margin-left:auto">⇩ Relatório Excel</button></div>`;
   const rows=V.map(x=>`<tr><td>${dPT(x.iso)}</td><td>${x.dia}</td>
     <td><select class="xT" data-d="${x.iso}">${['Sábado','Domingo','Feriado','Pernoite','Outro'].map(o=>`<option ${x.tipo===o?'selected':''}>${o}</option>`).join('')}</select></td>
     <td class="note" style="white-space:normal;max-width:220px">${esc(x.obs)}</td>
@@ -2803,6 +2839,8 @@ function bind(){
   document.querySelectorAll('.xV').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).valor=e.target.value;save();render()});
   document.querySelectorAll('.xP').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).pago=e.target.value;save();render()});
   document.querySelectorAll('.xF').forEach(el=>el.onclick=()=>{XPAG=el.dataset.f;render()});
+  if($('#xMes'))$('#xMes').onchange=e=>{XMES=e.target.value;render()};
+  if($('#xXlsx'))$('#xXlsx').onclick=e=>extrasExcel(e.currentTarget);
   document.querySelectorAll('.xN').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).notas=e.target.value;save()});
   document.querySelectorAll('.dDel').forEach(el=>el.onclick=e=>{S.dest.splice(+e.target.dataset.i,1);save();render()});
   // --- contrato / salário ---
