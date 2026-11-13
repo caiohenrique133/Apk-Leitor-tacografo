@@ -193,6 +193,10 @@ tr.aus-bx td:first-child{box-shadow:inset 4px 0 0 var(--bad)}
 tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
 .asel{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:2px solid var(--amber);padding:10px 14px;margin:0 0 10px}
 .asel .btn{margin-left:auto}
+.hfiltro{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.hfiltro:empty{display:none}
+.hfiltro select{padding:8px 10px;max-width:190px}
+.hfiltro .btn{padding:7px 10px}
 .pasta{font-family:var(--mono);font-size:13px;line-height:1.9;margin:2px 0 6px;padding:10px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}
 .pasta-raiz{font-weight:600}
 .pasta>div:not(.pasta-raiz){padding-left:22px}
@@ -318,7 +322,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v3.7 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v3.8 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -327,6 +331,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
     <div class="hsub" id="hDriver">Carrega ficheiros .esm / .ddd do cartão de condutor</div>
   </div>
   <div class="top-ctrl noprint">
+    <div id="hFiltro" class="hfiltro"></div>
     <button class="filebtn" id="btnLoad"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Ficheiros</button>
     <input type="file" id="fileIn" multiple accept=".esm,.ESM,.ddd,.DDD,.tgd" hidden>
   </div>
@@ -1386,20 +1391,38 @@ function kpi(lbl,val,cls='',small=''){return `<div class="kpi ${cls}"><span>${lb
 function empty(){return `<div class="empty">Ainda sem dados.<br><br><button class="btn amber" onclick="document.getElementById('fileIn').click()">Carregar ficheiros .esm / .ddd</button></div>`}
 function selMes(){
   const ms=[...new Set(ROWS.map(r=>r.iso.slice(0,7)))];
-  return `<select id="fMes"><option value="">Todos os meses</option>${ms.map(m=>`<option ${fMes===m?'selected':''} value="${m}">${dPT(m+'-01').slice(3)}</option>`).join('')}</select>
-  <select id="fSem"><option value="">Todas as semanas</option>${WEEKS.map(w=>`<option ${fSem===w.k?'selected':''} value="${w.k}">${dPT(w.k)} – ${dPT(w.kEnd)}</option>`).join('')}</select>`;
+  return `<select id="fMes" aria-label="Mês"><option value="">Todos os meses</option>${ms.slice().reverse().map(m=>`<option ${fMes===m?'selected':''} value="${m}">${mesNome(m)}</option>`).join('')}</select>
+  <select id="fSem" aria-label="Semana"><option value="">Todas as semanas</option>${WEEKS.slice().reverse().map(w=>`<option ${fSem===w.k?'selected':''} value="${w.k}">${dPT(w.k).slice(0,5)} – ${dPT(w.kEnd).slice(0,5)}/${w.kEnd.slice(2,4)}</option>`).join('')}</select>`;
 }
 function fRows(){return ROWS.filter(r=>(!fMes||r.iso.slice(0,7)===fMes)&&(!fSem||(r.iso>=fSem&&r.iso<=WEEKS.find(w=>w.k===fSem).kEnd)))}
 
+/* ---- filtro de período (mês ou semana) no topo, aplicado a todas as abas com registos ---- */
+const FILTRO_TABS=['painel','registos','manual','jornada','lei84','descansos','destinos','extras','alertas'];
+let ROWS_TODOS=null,RESTS_TODOS=null;
+function periodo(){
+  if(fSem){const w=WEEKS.find(w=>w.k===fSem);if(w)return [w.k,w.kEnd,'Semana '+dPT(w.k)+' – '+dPT(w.kEnd)]}
+  if(fMes){const e=new Date(fMes+'-01T00:00:00Z');e.setUTCMonth(e.getUTCMonth()+1);e.setUTCDate(0);return [fMes+'-01',dISO(e),mesNome(fMes)]}
+  return null;
+}
 function render(){
   nav();
+  const hf=$('#hFiltro');
+  if(hf)hf.innerHTML=FILTRO_TABS.includes(TAB)&&ROWS.length?selMes()+(fMes||fSem?'<button class="btn" id="fLimpa" title="Ver todo o período" aria-label="Limpar filtro">✕</button>':''):'';
   const M=$('#main');
   const P=S.perfil||{};
   if(IDENT)$('#hDriver').textContent=IDENT.nome+' '+IDENT.ap+' · cartão '+IDENT.card+(DL?' · descarga '+dPT(dISO(new Date(DL*1000))):'');
   else if(P.nome||P.cartao)$('#hDriver').textContent=[P.nome,P.ap].filter(Boolean).join(' ')+(P.cartao?' · cartão '+P.cartao:'')+(P.empresa?' · '+P.empresa:'');
   if(!ROWS.length&&!['manual','leitor','conta','ferias'].includes(TAB)){M.innerHTML=empty();return}
   const V={painel,registos,leitor,manual,jornada,lei84,descansos,destinos,extras,alertas,fisc,exportar,conta,ferias,reljornada:relJornada};
-  M.innerHTML=`<section class="on ${TAB==='fisc'||TAB==='reljornada'?'print':''}" id="sec">${V[TAB]()}</section>`;
+  // com filtro: a aba vê só os registos do período (os originais são repostos logo a seguir)
+  const PER=FILTRO_TABS.includes(TAB)?periodo():null;
+  const O={R:ROWS,W:WEEKS,D:RESTS};let html;
+  ROWS_TODOS=ROWS;RESTS_TODOS=RESTS;
+  try{
+    if(PER){ROWS=ROWS.filter(r=>r.iso>=PER[0]&&r.iso<=PER[1]);WEEKS=WEEKS.filter(w=>w.kEnd>=PER[0]&&w.k<=PER[1]);RESTS=RESTS.filter(r=>r.iso>=PER[0]&&r.iso<=PER[1])}
+    html=PER&&!ROWS.length&&TAB!=='manual'?`<div class="empty">Sem registos em ${esc(PER[2])}.</div>`:V[TAB]();
+  }finally{ROWS=O.R;WEEKS=O.W;RESTS=O.D}
+  M.innerHTML=`<section class="on ${TAB==='fisc'||TAB==='reljornada'?'print':''}" id="sec">${html}</section>`;
   bind();
 }
 
@@ -1409,8 +1432,9 @@ function render(){
    · com os 3 reduzidos já gastos → mínimo 11h (regular)
    · o descanso tem de ficar completo dentro das 24h contadas desde o início do turno */
 function proximoTurno(){
-  if(!ROWS.length)return null;
-  const A=ROWS[ROWS.length-1],R=RESTS[RESTS.length-1];
+  const RW=ROWS_TODOS||ROWS,RS=RESTS_TODOS||RESTS;
+  if(!RW.length)return null;
+  const A=RW[RW.length-1],R=RS[RS.length-1];
   const usados=R?(R.weekly?0:R.red):0;
   const min=usados>=3?11*60:9*60;
   const pode=A.en+min,regular=A.en+11*60,jan=A.st+1440,amp=A.en-A.st;
@@ -1480,7 +1504,7 @@ function registos(){
     <td>${strip(r.segs,r.st,r.en)}</td>
     <td><input class="obs eObs" data-d="${r.iso}" value="${esc(r.obs)}" placeholder="destino / notas"></td>
     <td><input type="checkbox" class="chk eExt" data-d="${r.iso}" ${r.extra?'checked':''} aria-label="Extra"></td></tr>`).join('');
-  return `<div class="row">${selMes()}<button class="btn" id="rEmail">✉ Enviar por e-mail</button></div>
+  return `<div class="row" style="margin-top:0"><button class="btn" id="rEmail">✉ Enviar por e-mail</button></div>
   <div class="legend"><span><i style="background:var(--drive)"></i>Condução</span><span><i style="background:var(--work)"></i>Outros trabalhos</span><span><i style="background:var(--avail)"></i>Disponibilidade</span><span><i style="background:var(--s-pausa)"></i>Pausa</span></div>
   <div class="tw"><table><tr><th>Data</th><th>Início</th><th>Fim</th><th>Turno</th><th>Total</th><th>Condução</th><th>Outros</th><th>Disp.</th><th>Espera Doc.</th><th>Pausa</th><th>KM</th><th>Dia 00–24h</th><th>Observações</th><th>Extra</th></tr>${rows}
     ${FR.length?`<tr class="xtot"><td>Total · ${FR.length} dia${FR.length>1?'s':''}</td><td></td><td></td>
@@ -1762,7 +1786,8 @@ async function fotoGuardaAparelho(f,silencio){
 }
 function fotosHTML(){
   const ms=[...new Set(FOTOS.map(f=>f.iso.slice(0,7)))];
-  const lista=FOTOS.filter(f=>!FMES||f.iso.slice(0,7)===FMES);
+  const PF=periodo();
+  const lista=FOTOS.filter(f=>(!FMES||f.iso.slice(0,7)===FMES)&&(!PF||(f.iso>=PF[0]&&f.iso<=PF[1])));
   const grupos=[];for(const f of lista){const m=f.iso.slice(0,7);let g=grupos.find(x=>x.m===m);if(!g)grupos.push(g={m,fs:[]});g.fs.push(f)}
   const tot=FOTOS.reduce((s,f)=>s+(f.bytes||0),0);
   const dia=FDATA||MDRAFT.d||hojeLocal();
@@ -1980,7 +2005,8 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&CAM.stream
 window.voltarApp=()=>{if($('#camView')&&!$('#camView').hidden){camFecha();return true}if(FV.id){fotoFecha();return true}return false};
 function manual(){
   const D=MDRAFT;
-  const ds=Object.keys(S.man).sort().reverse();
+  const PD=periodo();
+  const ds=Object.keys(S.man).sort().reverse().filter(d=>!PD||(d>=PD[0]&&d<=PD[1]));
   const jo=D.ini&&D.fim?manJorn(D):0;
   const somaT=parseHM(D.cond)+parseHM(D.ot)+parseHM(D.disp);
   const conflito=D.d&&ROWS.some(r=>r.iso===D.d&&!r.man);
@@ -2255,7 +2281,7 @@ function extraRows(){
 }
 let XPAG='',XMES=''; // filtros da aba Extras: pagamento ('' todos · 'sim' pagos · 'nao' não pagos) e mês
 const xValor=x=>parseFloat(String(x.valor||'').replace(',','.'))||0;
-const xFiltra=X=>X.filter(x=>(!XMES||x.iso.slice(0,7)===XMES)&&(XPAG===''||(XPAG==='sim'?x.pago==='Sim':x.pago!=='Sim')));
+const xFiltra=X=>{const P=periodo();return X.filter(x=>(!P||(x.iso>=P[0]&&x.iso<=P[1]))&&(XPAG===''||(XPAG==='sim'?x.pago==='Sim':x.pago!=='Sim')))};
 /* relatório Excel dos extras: folha EXTRAS (com os filtros escolhidos) + RESUMO POR MÊS */
 async function extrasExcel(btn){
   const V=xFiltra(extraRows());if(!V.length){alert('Não há dias extra com estes filtros.');return}
@@ -2264,7 +2290,7 @@ async function extrasExcel(btn){
   try{
     const tot=V.reduce((s,x)=>s+xValor(x),0),por=V.filter(x=>x.pago!=='Sim').reduce((s,x)=>s+xValor(x),0);
     const fPag=XPAG==='sim'?'só pagos':XPAG==='nao'?'só não pagos':'pagos e não pagos';
-    const R={mes:XMES,ini:V[V.length-1].iso<V[0].iso?V[V.length-1].iso:V[0].iso,fim:V[V.length-1].iso>V[0].iso?V[V.length-1].iso:V[0].iso};
+    const R={mes:fSem?'':fMes,ini:V[V.length-1].iso<V[0].iso?V[V.length-1].iso:V[0].iso,fim:V[V.length-1].iso>V[0].iso?V[V.length-1].iso:V[0].iso};
     const ord=V.slice().sort((a,b)=>a.iso.localeCompare(b.iso));
     const F={titulo:'EXTRAS — DIAS EXTRA, FINS DE SEMANA E FERIADOS',sub:'Dias marcados como Extra nos Registos e dias trabalhados a sábado, domingo ou feriado · '+fPag+'.',
       kpis:[['Total registado (€)',tot,'eur'],['Por receber (€)',por,'eur'],['Recebido (€)',tot-por,'eur'],['Dias extra',V.length,'n'],['Horas em dias extra',V.reduce((s,x)=>s+x.h,0),'h']],
@@ -2283,7 +2309,7 @@ async function extrasExcel(btn){
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,xFolhaPadrao(F,R,[2,13,8,12,60,10,8,12,9,30,14]),'EXTRAS');
     XLSX.utils.book_append_sheet(wb,xFolhaPadrao(M,R,[2,16,8,10,14,14,16,16]),'RESUMO POR MÊS');
-    const nome='Extras_'+(XMES||(R.ini+'_a_'+R.fim))+(XPAG==='sim'?'_pagos':XPAG==='nao'?'_nao_pagos':'')+'.xlsx';
+    const nome='Extras_'+((fSem?'':fMes)||(R.ini+'_a_'+R.fim))+(XPAG==='sim'?'_pagos':XPAG==='nao'?'_nao_pagos':'')+'.xlsx';
     download(nome,new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
   }finally{btn.disabled=false}
 }
@@ -2297,7 +2323,6 @@ function extras(){
   const filtro=`<div class="row xfiltro" role="group" aria-label="Filtrar por pagamento">
     ${[['','Todos',X.length],['sim','Pagos',nPag],['nao','Não pagos',X.length-nPag]].map(([v,t,n])=>
       `<button class="btn ${XPAG===v?'amber':''} xF" data-f="${v}" aria-pressed="${XPAG===v}">${t} <span class="mono">${n}</span></button>`).join('')}
-    <select id="xMes" aria-label="Mês"><option value="">Todos os meses</option>${msX.map(m=>`<option value="${m}" ${XMES===m?'selected':''}>${mesNome(m)}</option>`).join('')}</select>
     <button class="btn amber" id="xXlsx" style="margin-left:auto">⇩ Relatório Excel</button></div>`;
   const rows=V.map(x=>`<tr><td>${dPT(x.iso)}</td><td>${x.dia}</td>
     <td><select class="xT" data-d="${x.iso}">${['Sábado','Domingo','Feriado','Pernoite','Outro'].map(o=>`<option ${x.tipo===o?'selected':''}>${o}</option>`).join('')}</select></td>
@@ -2332,7 +2357,7 @@ function alertas(){
     ${kpi('Cobertura de registos',cov+' dias',cov>=56?'ok':'warn','mín. 56 + dia atual')}</div>
   ${geral.map(a=>`<div class="alert ${a.g}"><span class="g">${a.g.replace('_',' ')}</span> · ${esc(a.txt)}<div class="lb">${esc(a.lb)}</div></div>`).join('')}
   <h2>Dias em incumprimento — jornada 00:00–24:00</h2>
-  <div class="row">${selMes()}</div>
+
   ${dias.some(x=>x.al.length)?`<div class="tw"><table><tr><th>Data</th><th>Turno</th><th>Jornada</th><th>Condução</th><th>Dia 00–24h</th><th>Achados do dia</th></tr>
   ${dias.filter(x=>x.al.length).map(diaLinha).join('')}</table></div>
   <p class="note">${dias.filter(x=>x.al.length).length} de ${dias.length} dias com achados; os restantes estão em conformidade.</p>`
@@ -2830,6 +2855,7 @@ function bind(){
   fotosBind();
   feriasBind();
   document.querySelectorAll('#fMes,#fSem').forEach(el=>el.onchange=e=>{if(e.target.id==='fMes'){fMes=e.target.value;fSem=''}else{fSem=e.target.value;fMes=''}render()});
+  if($('#fLimpa'))$('#fLimpa').onclick=()=>{fMes='';fSem='';render()};
   document.querySelectorAll('.eEsp').forEach(el=>el.onchange=e=>{S.espera[e.target.dataset.d]=parseHM(e.target.value);save();rebuild()});
   document.querySelectorAll('.eKm').forEach(el=>el.onchange=e=>{S.km[e.target.dataset.d]=+e.target.value||0;save();rebuild()});
   document.querySelectorAll('.eObs').forEach(el=>el.onchange=e=>{S.obs[e.target.dataset.d]=e.target.value;save()});
@@ -2839,7 +2865,6 @@ function bind(){
   document.querySelectorAll('.xV').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).valor=e.target.value;save();render()});
   document.querySelectorAll('.xP').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).pago=e.target.value;save();render()});
   document.querySelectorAll('.xF').forEach(el=>el.onclick=()=>{XPAG=el.dataset.f;render()});
-  if($('#xMes'))$('#xMes').onchange=e=>{XMES=e.target.value;render()};
   if($('#xXlsx'))$('#xXlsx').onclick=e=>extrasExcel(e.currentTarget);
   document.querySelectorAll('.xN').forEach(el=>el.onchange=e=>{xm(e.target.dataset.d).notas=e.target.value;save()});
   document.querySelectorAll('.dDel').forEach(el=>el.onclick=e=>{S.dest.splice(+e.target.dataset.i,1);save();render()});
