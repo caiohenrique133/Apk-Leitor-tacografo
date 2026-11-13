@@ -318,7 +318,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v3.4 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v3.5 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1480,7 +1480,7 @@ function registos(){
     <td>${strip(r.segs,r.st,r.en)}</td>
     <td><input class="obs eObs" data-d="${r.iso}" value="${esc(r.obs)}" placeholder="destino / notas"></td>
     <td><input type="checkbox" class="chk eExt" data-d="${r.iso}" ${r.extra?'checked':''} aria-label="Extra"></td></tr>`).join('');
-  return `<div class="row">${selMes()}</div>
+  return `<div class="row">${selMes()}<button class="btn" id="rEmail">✉ Enviar por e-mail</button></div>
   <div class="legend"><span><i style="background:var(--drive)"></i>Condução</span><span><i style="background:var(--work)"></i>Outros trabalhos</span><span><i style="background:var(--avail)"></i>Disponibilidade</span><span><i style="background:var(--s-pausa)"></i>Pausa</span></div>
   <div class="tw"><table><tr><th>Data</th><th>Início</th><th>Fim</th><th>Turno</th><th>Total</th><th>Condução</th><th>Outros</th><th>Disp.</th><th>Espera Doc.</th><th>Pausa</th><th>KM</th><th>Dia 00–24h</th><th>Observações</th><th>Extra</th></tr>${rows}
     ${FR.length?`<tr class="xtot"><td>Total · ${FR.length} dia${FR.length>1?'s':''}</td><td></td><td></td>
@@ -2586,8 +2586,12 @@ function folhaDados(F){
 }
 function folhaJornada(R){const F=rjFolhas(R);return xFolhaPadrao(F.jornada,R,[2,14,14,7,13,14,13,14,11,15,14,13,13])}
 async function exportaRelJornada(){
-  const R=relJornadaDados(RJ_MES);if(!R)return;
-  try{await carregaXLSX()}catch(e){alert('Sem ligação para carregar a biblioteca Excel. Usa Imprimir / PDF, que funciona offline.');return}
+  let r;try{r=await relJornadaBlob(RJ_MES)}catch(e){alert('Sem ligação para carregar a biblioteca Excel. Usa Imprimir / PDF, que funciona offline.');return}
+  if(r)download(r.nome,r.blob);
+}
+async function relJornadaBlob(mes){
+  const R=relJornadaDados(mes);if(!R)return null;
+  await carregaXLSX();
   const F=rjFolhas(R),wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,folhaDados(F.dados),'DADOS');
   XLSX.utils.book_append_sheet(wb,xFolhaPadrao(F.jornada,R,[2,14,14,7,13,14,13,14,11,15,14,13,13]),'JORNADA TOTAL');
@@ -2595,7 +2599,67 @@ async function exportaRelJornada(){
   XLSX.utils.book_append_sheet(wb,xFolhaPadrao(F.desc,R,[2,13,17,17,13,17,13,13,24,56,13,16,14,30,12,12,15,15]),'DESCANSOS');
   XLSX.utils.book_append_sheet(wb,xFolhaPadrao(F.extras,R,[2,13,8,12,60,10,8,12,9,30,14]),'EXTRAS');
   const nome='Relatorio_Jornada_'+(R.mes?R.mes:R.ini+'_a_'+R.fim)+'.xlsx';
-  download(nome,new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  return {nome,blob:new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})};
+}
+/* ---- enviar registos por e-mail ---- */
+const EM_TIPOS=[['rel','Relatório de jornada (Excel, 5 folhas)'],['csv','Registos diários (CSV)'],['ddd','Último ficheiro .ddd do cartão'],['backup','Backup dos dados (JSON)']];
+let EMSG='',EMMES='';
+function emailResumo(mes){
+  const rs=ROWS.filter(r=>!mes||r.iso.slice(0,7)===mes);
+  const sm=f=>rs.reduce((a,r)=>a+f(r),0);
+  const I=rjIdent();
+  const per=mes?mesNome(mes):(rs.length?dPT(rs[0].iso)+' a '+dPT(rs[rs.length-1].iso):'');
+  return {per,txt:[`Registos do tacógrafo${I.nome?' — '+I.nome:''}`,per&&`Período: ${per}`,
+    `Dias trabalhados: ${rs.length}`,`Jornada (início → fim): ${hm(sm(r=>r.en-r.st))}`,`Condução: ${hm(sm(r=>r.cond))}`,
+    `Outros trabalhos: ${hm(sm(r=>r.ot))} · Disponibilidade: ${hm(sm(r=>r.disp))}`,'','Enviado a partir da app Controle de Tacógrafo.'].filter(x=>x!==false&&x!=null).join('\n')};
+}
+async function emailAnexo(tipo,mes){
+  if(tipo==='rel'){const r=await relJornadaBlob(mes);if(!r)throw new Error('Sem dias de trabalho no período escolhido.');return {...r,sub:'Relatorios'}}
+  if(tipo==='csv'){const m=dadosMatrix(),rows=m.slice(1).filter((x,i)=>!mes||ROWS[i].iso.slice(0,7)===mes);
+    if(!rows.length)throw new Error('Sem dias de trabalho no período escolhido.');
+    const csv=[m[0],...rows].map(r=>r.map(c=>'"'+String(c??'').replace(/"/g,'""')+'"').join(';')).join('\r\n');
+    return {nome:'Registos_tacografo_'+(mes||'todos')+'.csv',blob:new Blob(['\ufeff'+csv],{type:'text/csv'}),sub:'Relatorios'}}
+  if(tipo==='ddd'){const fs=await dddFicheiros();if(!fs.length)throw new Error('Ainda não há ficheiros do cartão.');
+    const f=fs.slice().sort((a,b)=>(b.t||0)-(a.t||0)||(b.fim||'').localeCompare(a.fim||''))[0];
+    return {nome:f.nome,blob:new Blob([f.ab],{type:'application/octet-stream'}),sub:'DDD'}}
+  return {nome:'backup_tacografo_'+hojeLocal()+'.json',blob:new Blob([JSON.stringify(estadoLocal(),null,1)],{type:'application/json'}),sub:'Backups'};
+}
+function emailHTML(){
+  const ms=[...new Set(ROWS.map(r=>r.iso.slice(0,7)))].reverse();
+  return `<div class="card" id="emailCard"><h2 style="margin-top:0">Enviar por e-mail</h2>
+    <div class="row">
+      <label class="note" style="flex:1;min-width:220px">Para <input type="email" id="mPara" value="${esc(S.emailEnvio||'')}" placeholder="endereço de e-mail (opcional)" style="width:100%" autocomplete="email"></label>
+    </div>
+    <div class="row">
+      <label class="note">O que enviar <select id="mTipo">${EM_TIPOS.map(([v,t])=>`<option value="${v}" ${S.emailTipo===v?'selected':''}>${t}</option>`).join('')}</select></label>
+      <label class="note">Período <select id="mMes"><option value="">Todo o período</option>${ms.map(m=>`<option value="${m}" ${EMMES===m?'selected':''}>${mesNome(m)}</option>`).join('')}</select></label>
+    </div>
+    <div class="row"><button class="btn amber" id="mEnviar">✉ Enviar por e-mail</button></div>
+    ${EMSG?`<div class="note" aria-live="polite">${esc(EMSG)}</div>`:''}</div>`;
+}
+async function emailEnviar(btn){
+  const para=$('#mPara').value.trim(),tipo=$('#mTipo').value,mes=$('#mMes').value;EMMES=mes;
+  if(para&&!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+([,; ]+[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+)*$/.test(para)){alert('O endereço de e-mail não parece estar certo.');return}
+  S.emailEnvio=para;S.emailTipo=tipo;save();
+  btn.disabled=true;btn.textContent='A preparar…';
+  try{
+    const a=await emailAnexo(tipo,mes),R=emailResumo(tipo==='rel'||tipo==='csv'?mes:'');
+    const assunto=`Tacógrafo — ${EM_TIPOS.find(x=>x[0]===tipo)[1].replace(/ \(.*\)$/,'')}${R.per&&(tipo==='rel'||tipo==='csv')?' — '+R.per:''}`;
+    // 1) app Android: escolha da app de e-mail com o anexo
+    if(AND&&AND.enviarEmail){const r=String(AND.enviarEmail(a.sub,a.nome,await blobB64(a.blob),para,assunto,R.txt));
+      if(r==='ok'){EMSG='Escolhe a app de e-mail (Gmail, Outlook…). O ficheiro vai em anexo: '+a.nome;return}}
+    // 2) telemóvel no browser: partilhar o ficheiro
+    const f=new File([a.blob],a.nome,{type:a.blob.type||'application/octet-stream'});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){
+      try{await navigator.share({files:[f],title:assunto,text:R.txt});EMSG='Escolhe a app de e-mail para enviar '+a.nome+'.';return}
+      catch(e){if(e&&e.name==='AbortError'){EMSG='Envio cancelado.';return}}
+    }
+    // 3) restantes: descarrega o ficheiro e abre o e-mail já preenchido
+    download(a.nome,a.blob);
+    location.href=`mailto:${encodeURIComponent(para)}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(R.txt+'\n\n(Anexa o ficheiro descarregado: '+a.nome+')')}`;
+    EMSG='O ficheiro '+a.nome+' foi descarregado. No e-mail que abriu, anexa-o antes de enviar.';
+  }catch(e){EMSG=e.message||'Não consegui preparar o envio.'}
+  finally{btn.disabled=false;btn.textContent='✉ Enviar por e-mail';if(TAB==='exportar')render()}
 }
 
 /* ---- Exportar ---- */
@@ -2670,6 +2734,7 @@ async function dddPreenche(){
 function exportar(){
   return `<div class="card"><h2 style="margin-top:0">Relatório de jornada</h2>
   <div class="row"><button class="btn amber" id="exRelJ">📄 Abrir relatório de jornada</button></div></div>
+  ${emailHTML()}
   ${pastaHTML()}
   <div class="card"><h2 style="margin-top:0">Ficheiros .ddd do cartão</h2><div id="dddLista"><span class="note">A carregar…</span></div></div>
   <div class="grid2">
@@ -2859,6 +2924,10 @@ function bind(){
   };
   if(q('#exWipe'))q('#exWipe').onclick=()=>{if(confirm('Apagar todas as notas manuais?')){localStorage.removeItem(LS);location.reload()}};
   if(q('#dddLista'))dddPreenche();
+  if(q('#mEnviar'))q('#mEnviar').onclick=e=>emailEnviar(e.currentTarget);
+  if(q('#rEmail'))q('#rEmail').onclick=()=>{const m=fMes;TAB='exportar';render();
+    EMMES=m||'';const mm=$('#mMes');if(mm)mm.value=EMMES;const tp=$('#mTipo');if(tp&&!S.emailTipo)tp.value='csv';
+    const c=$('#emailCard');if(c)c.scrollIntoView({block:'start'})};
   if(q('#pastaTudo'))q('#pastaTudo').onclick=e=>pastaGuardaTudo(e.currentTarget);
   if(q('#pastaAbrir'))q('#pastaAbrir').onclick=()=>{try{AND.abrirPasta('')}catch(e){}};
   if(q('#exPdf'))q('#exPdf').onclick=()=>{TAB='fisc';render();setTimeout(()=>window.print(),150)};

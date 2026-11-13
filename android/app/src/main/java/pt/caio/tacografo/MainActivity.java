@@ -24,6 +24,7 @@ import android.util.Base64;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.provider.Settings;
+import android.content.ClipData;
 import android.provider.DocumentsContract;
 import android.app.DownloadManager;
 import android.database.Cursor;
@@ -207,6 +208,22 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             return "erro|" + e.getMessage();
         }
+    }
+
+    /* grava (substituindo) e devolve o endereço do ficheiro para o anexar a um e-mail — Android 10+ */
+    Uri gravaUri(String sub, String nome, byte[] d) throws Exception {
+        String n = (nome == null || nome.isEmpty() ? "ficheiro" : nome).replaceAll("[^0-9A-Za-z _.()-]", "_");
+        String rel = relDoc(sub);
+        Uri u = procura(rel, n);
+        if (u == null) {
+            ContentValues v = new ContentValues();
+            v.put(MediaStore.Downloads.DISPLAY_NAME, n);
+            v.put(MediaStore.Downloads.MIME_TYPE, mimeDe(n));
+            v.put(MediaStore.Downloads.RELATIVE_PATH, rel);
+            u = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+        }
+        try (OutputStream o = getContentResolver().openOutputStream(u, "wt")) { o.write(d); }
+        return u;
     }
 
     String pastaRelativa(String sub) { return relDoc("Fotos discos/" + (sub == null ? "" : sub)); }
@@ -439,6 +456,29 @@ public class MainActivity extends Activity {
                     : n.endsWith(".json") ? "Backups" : n.endsWith(".jpg") ? "Fotos discos" : "Relatorios";
             String r = escrever(sub, nome, Base64.decode(b64, Base64.DEFAULT), 0);
             return r.startsWith("ok|") ? "Guardado em " + r.substring(3) + ":\n" + nome : "Não consegui guardar o ficheiro: " + r.substring(r.indexOf('|') + 1);
+        }
+
+        /* Envia um ficheiro por e-mail: grava-o na pasta Tacografo e abre a escolha da app de e-mail com o anexo. */
+        @JavascriptInterface
+        public String enviarEmail(String sub, String nome, String b64, String para, String assunto, String texto) {
+            if (Build.VERSION.SDK_INT < 29) return "erro|Android antigo";
+            try {
+                Uri u = gravaUri(sub, nome, Base64.decode(b64, Base64.DEFAULT));
+                Intent i = new Intent(Intent.ACTION_SEND);
+                i.setType(mimeDe(nome));
+                if (para != null && !para.trim().isEmpty()) i.putExtra(Intent.EXTRA_EMAIL, para.trim().split("[,; ]+"));
+                i.putExtra(Intent.EXTRA_SUBJECT, assunto == null ? "" : assunto);
+                i.putExtra(Intent.EXTRA_TEXT, texto == null ? "" : texto);
+                i.putExtra(Intent.EXTRA_STREAM, u);
+                i.setClipData(ClipData.newRawUri(nome, u));
+                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                final Intent esc = Intent.createChooser(i, "Enviar por e-mail");
+                esc.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                runOnUiThread(() -> { try { startActivity(esc); } catch (Exception e) { } });
+                return "ok";
+            } catch (Exception e) {
+                return "erro|" + e.getMessage();
+            }
         }
 
         @JavascriptInterface
