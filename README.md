@@ -21,3 +21,11 @@ A pasta `android/` tem a app nativa: abre a versão do Vercel e dá-lhe acesso d
 (ponte `window.AndroidUsb`), que o Chrome bloqueia em páginas web. Cada alteração em `android/` é compilada
 pelo GitHub Actions e publicada em **Releases**:
 https://github.com/caiohenrique133/Apk-Leitor-tacografo/releases/latest/download/Tacografo.apk
+
+## Código fonte e versão publicada
+
+- Código fonte legível: `index.html`, `sw.js`, `manifest.json`, `icons/` e `android/` (raiz do repositório).
+- Versão publicada: o Vercel corre `node tools/build.mjs`, que gera `dist/` com o JavaScript ofuscado e o
+  HTML/CSS minificado. É essa versão que o site e a app Android abrem.
+- Para gerar `dist/` no computador: `npm ci --prefix tools` e depois `node tools/build.mjs`.
+- Licença: todos os direitos reservados (ver `LICENSE`).
