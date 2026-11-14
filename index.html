@@ -54,9 +54,21 @@ h2::before{content:"";width:18px;height:3px;flex:none;background:repeating-linea
 h2::after{content:"";flex:1;height:1px;background:var(--line)}
 .mono,td.t,.kpi b{font-family:var(--mono);font-variant-numeric:tabular-nums}
 
-/* ---- estrutura: barra lateral + conteúdo ---- */
-.app{display:flex;min-height:100vh}
-.side{width:218px;flex-shrink:0;background:var(--asfalto);color:#e8e6e1;display:flex;flex-direction:column;padding:18px 14px;position:sticky;top:0;height:100vh;overflow-y:auto;scrollbar-width:thin}
+/* ---- estrutura: menu escondido (gaveta) + conteúdo ---- */
+.app{min-height:100vh}
+.side{position:fixed;top:0;left:0;bottom:0;z-index:10030;width:min(280px,86vw);background:var(--asfalto);color:#e8e6e1;display:flex;flex-direction:column;padding:16px 14px max(16px,env(safe-area-inset-bottom));overflow-y:auto;scrollbar-width:thin;
+  transform:translateX(-104%);visibility:hidden;transition:transform .22s ease,visibility 0s linear .22s;box-shadow:6px 0 30px rgba(0,0,0,.35)}
+.side.aberta{transform:none;visibility:visible;transition:transform .22s ease}
+.gaveta-fundo{position:fixed;inset:0;z-index:10020;background:rgba(10,12,15,.5);opacity:0;pointer-events:none;transition:opacity .2s}
+.gaveta-fundo.on{opacity:1;pointer-events:auto}
+.gaveta-x{margin-left:auto;width:36px;height:36px;border-radius:8px;color:#c4cad1;font-size:18px;display:flex;align-items:center;justify-content:center}
+.gaveta-x:hover{background:var(--asfalto2);color:#fff}
+.top-esq{display:flex;gap:14px;align-items:center;min-width:0}
+.menu-btn{position:relative;width:48px;height:48px;border-radius:12px;flex:none;padding:0;box-shadow:0 0 0 2px var(--amber);background:var(--panel)}
+.menu-btn img{width:100%;height:100%;display:block;border-radius:12px}
+.menu-btn .menu-ic{position:absolute;right:-6px;bottom:-6px;width:22px;height:22px;border-radius:7px;background:var(--amber);color:#15191E;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
+.menu-btn:hover{box-shadow:0 0 0 3px var(--amber)}
+.menu-btn:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
 .brand{display:flex;gap:10px;align-items:center;padding:4px 8px 14px}
 .brand-mark{width:36px;height:36px;border-radius:9px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 0 0 2px var(--amber)}
 .brand-mark img{width:100%;height:100%;display:block}
@@ -65,14 +77,14 @@ h2::after{content:"";flex:1;height:1px;background:var(--line)}
 .roadline{height:3px;background:repeating-linear-gradient(90deg,var(--amber) 0 18px,transparent 18px 32px);margin:0 8px 14px;opacity:.9}
 .roadline.wide{margin:0;opacity:1}
 #tabs{display:flex;flex-direction:column;gap:2px;flex:1}
-.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;color:#c4cad1;font-weight:500;border-radius:7px;text-align:left;position:relative;white-space:nowrap}
+.nav-item{display:flex;align-items:center;gap:12px;padding:11px 12px;font-size:15px;color:#c4cad1;font-weight:500;border-radius:7px;text-align:left;position:relative;white-space:nowrap}
 .nav-item svg{flex:none}
 .nav-item:hover{background:var(--asfalto2);color:#fff}
 .nav-item.on{background:var(--asfalto2);color:var(--amber)}
 .nav-item.on::before{content:'';position:absolute;left:-2px;top:8px;bottom:8px;width:3px;background:repeating-linear-gradient(180deg,var(--amber) 0 6px,transparent 6px 10px);border-radius:2px}
 .side-foot{margin-top:12px;border-top:1px solid #2a313a;padding-top:10px}
 .estado{font-size:11px;color:#6d7681;padding:4px 12px;font-family:var(--mono)}
-.col{flex:1;display:flex;flex-direction:column;min-width:0}
+.col{display:flex;flex-direction:column;min-width:0;min-height:100vh}
 .top{display:flex;align-items:center;justify-content:space-between;padding:18px 26px 14px;gap:16px;flex-wrap:wrap}
 .hsub{font-size:12px;color:var(--dim);margin-top:3px}
 .top-ctrl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -272,17 +284,10 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   .rj td.txt{min-width:0}.rj table.rj-dados td:nth-child(12){min-width:0}
   .rj td{white-space:nowrap}.rj td.txt{white-space:normal}.rj th{white-space:normal}
 }
-/* ---- ecrãs estreitos: a barra lateral fica como coluna estreita (ícone + nome) ---- */
+/* ---- ecrãs estreitos ---- */
 @media(max-width:980px){
-  .side{width:76px;padding:12px 6px;align-items:stretch}
-  .brand{justify-content:center;padding:2px 0 12px}
-  .brand-mark{width:38px;height:38px}
-  .brand-name,.brand-sub,.side-foot{display:none}
-  .side .roadline{margin:0 6px 10px;background:repeating-linear-gradient(90deg,var(--amber) 0 8px,transparent 8px 14px)}
-  #tabs{gap:1px}
-  .nav-item{flex-direction:column;gap:3px;padding:8px 2px 7px;font-size:10px;line-height:1.15;text-align:center;justify-content:center;white-space:normal;letter-spacing:.01em}
-  .nav-item svg{width:19px;height:19px}
-  .nav-item.on::before{left:0;top:9px;bottom:9px}
+  .menu-btn{width:44px;height:44px}
+  .top-esq{gap:12px}
   .top{padding:14px 14px 10px}
   h1{font-size:24px}
   h2{font-size:17px}
@@ -294,8 +299,6 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   .top-ctrl select{max-width:150px}
 }
 @media(max-width:420px){
-  .side{width:66px;padding:10px 4px}
-  .nav-item{font-size:9.5px}
   .kpi span{font-size:10.5px;letter-spacing:.05em}
 }
 @media print{
@@ -315,20 +318,28 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
 </head>
 <body>
 <div class="app">
-<aside class="side">
+<div class="gaveta-fundo" id="gavetaFundo" aria-hidden="true"></div>
+<aside class="side" id="gaveta" aria-label="Menu" aria-hidden="true">
   <div class="brand">
     <div class="brand-mark"><img src="icons/icon-192.png" alt="" width="36" height="36"></div>
     <div><div class="brand-name">TACÓGRAFO</div><div class="brand-sub">Controle de jornada · Caio</div></div>
+    <button class="gaveta-x" id="gavetaX" aria-label="Fechar menu">✕</button>
   </div>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v3.8 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v3.9 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
-  <div>
-    <h1 id="pgTitle">Painel</h1>
-    <div class="hsub" id="hDriver">Carrega ficheiros .esm / .ddd do cartão de condutor</div>
+  <div class="top-esq">
+    <button class="menu-btn noprint" id="menuBtn" aria-label="Abrir menu" aria-expanded="false" aria-controls="gaveta" title="Menu">
+      <img src="icons/icon-192.png" alt="" width="48" height="48">
+      <span class="menu-ic" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></span>
+    </button>
+    <div style="min-width:0">
+      <h1 id="pgTitle">Painel</h1>
+      <div class="hsub" id="hDriver">Carrega ficheiros .esm / .ddd do cartão de condutor</div>
+    </div>
   </div>
   <div class="top-ctrl noprint">
     <div id="hFiltro" class="hfiltro"></div>
@@ -1369,9 +1380,22 @@ const IC={
 const ico=(k,n=17)=>`<svg width="${n}" height="${n}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[k]||''}</svg>`;
 const TABS=[['painel','Painel'],['registos','Registos'],['leitor','Leitor'],['manual','Discos'],['jornada','Jornada'],['lei84','Lei 84'],['descansos','Descansos'],['destinos','Destinos'],['extras','Extras'],['ferias','Férias'],['alertas','Alertas'],['fisc','Fiscalização'],['exportar','Exportar'],['conta','Conta']];
 let TAB='painel',fMes='',fSem='';
+/* ---- menu: o ícone do canto superior esquerdo abre a lista das abas ---- */
+function gavetaAberta(){return $('#gaveta').classList.contains('aberta')}
+function gavetaAbre(){
+  const g=$('#gaveta');g.classList.add('aberta');g.setAttribute('aria-hidden','false');$('#gavetaFundo').classList.add('on');
+  $('#menuBtn').setAttribute('aria-expanded','true');document.body.style.overflow='hidden';
+  setTimeout(()=>{const a=$('#tabs .on')||$('#tabs button');if(a)a.focus()},60);
+}
+function gavetaFecha(semFoco){
+  const g=$('#gaveta');if(!g.classList.contains('aberta'))return;
+  g.classList.remove('aberta');g.setAttribute('aria-hidden','true');$('#gavetaFundo').classList.remove('on');
+  $('#menuBtn').setAttribute('aria-expanded','false');document.body.style.overflow='';
+  if(!semFoco)$('#menuBtn').focus();
+}
 function nav(){
   $('#tabs').innerHTML=TABS.map(t=>`<button data-t="${t[0]}" class="nav-item ${TAB===t[0]?'on':''}" ${TAB===t[0]?'aria-current="page"':''}>${ico(t[0])}<span>${t[1]}</span></button>`).join('');
-  $('#tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{TAB=b.dataset.t;render();scrollTo(0,0)});
+  $('#tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{TAB=b.dataset.t;gavetaFecha(true);render();scrollTo(0,0)});
   const tt=TABS.find(t=>t[0]===TAB);
   $('#pgTitle').textContent=TAB==='ferias'?'Férias, licenças e baixas':tt?tt[1]:TAB==='reljornada'?'Relatório de jornada':'';
 }
@@ -2002,7 +2026,7 @@ async function camFecha(){
 }
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&CAM.stream)camPara();else if(!document.hidden&&$('#camView')&&!$('#camView').hidden&&!CAM.stream)camLiga()});
 /* botão "voltar" do Android: fecha primeiro a câmara ou o visualizador */
-window.voltarApp=()=>{if($('#camView')&&!$('#camView').hidden){camFecha();return true}if(FV.id){fotoFecha();return true}return false};
+window.voltarApp=()=>{if(gavetaAberta()){gavetaFecha();return true}if($('#camView')&&!$('#camView').hidden){camFecha();return true}if(FV.id){fotoFecha();return true}return false};
 function manual(){
   const D=MDRAFT;
   const PD=periodo();
@@ -3059,6 +3083,10 @@ function bind(){
 
 /* ============ FICHEIROS ============ */
 $('#btnLoad').onclick=()=>$('#fileIn').click();
+$('#menuBtn').onclick=()=>gavetaAberta()?gavetaFecha():gavetaAbre();
+$('#gavetaX').onclick=()=>gavetaFecha();
+$('#gavetaFundo').onclick=()=>gavetaFecha();
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&gavetaAberta())gavetaFecha()});
 (()=>{const b=$('#cl-theme-toggle'),K='tacografo-theme';
   const pinta=()=>{const d=document.documentElement.getAttribute('data-theme')==='dark';b.textContent=d?'☀️':'🌙';
     const m=document.querySelector('meta[name=theme-color]');if(m)m.content=d?'#0d1013':'#15191E'};
