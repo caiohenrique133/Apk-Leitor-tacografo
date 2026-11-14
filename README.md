@@ -1,10 +1,12 @@
 # APK Leitor tacografo
 Leitor de dados tacografo
 
-App **Controle de Tacógrafo — Caio (v2.3)**, publicada como PWA no GitHub Pages:
-https://caiohenrique133.github.io/Apk-Leitor-tacografo/
+App **Controle de Tacógrafo (v4.0)**, publicada como PWA no Vercel:
+https://apk-leitor-tacografo.vercel.app/
 
-O APK Android é gerado em https://www.pwabuilder.com a partir desse endereço.
+Sem dados pessoais no código: quem abre a app pela primeira vez cria a sua conta de condutor no ecrã de
+boas-vindas. Cada aparelho pode ter várias contas, cada uma com os seus próprios dados (notas, ficheiros do
+cartão e fotos dos discos), guardados só nesse aparelho.
 
 ## Vercel
 

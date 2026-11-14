@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#15191E">
-<title>Controle de Tacógrafo — Caio</title>
+<title>Controle de Tacógrafo</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -59,6 +59,28 @@ h2::after{content:"";flex:1;height:1px;background:var(--line)}
 .side{position:fixed;top:0;left:0;bottom:0;z-index:10030;width:min(280px,86vw);background:var(--asfalto);color:#e8e6e1;display:flex;flex-direction:column;padding:16px 14px max(16px,env(safe-area-inset-bottom));overflow-y:auto;scrollbar-width:thin;
   transform:translateX(-104%);visibility:hidden;transition:transform .22s ease,visibility 0s linear .22s;box-shadow:6px 0 30px rgba(0,0,0,.35)}
 .side.aberta{transform:none;visibility:visible;transition:transform .22s ease}
+.conta-btn{display:flex;align-items:center;gap:10px;width:100%;margin:12px 0 4px;padding:9px 10px;border-radius:9px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#e8e6e1;text-align:left;font-size:14px;font-weight:600}
+.conta-nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conta-av{width:30px;height:30px;flex:none;border-radius:50%;background:var(--amber);color:#15191E;display:flex;align-items:center;justify-content:center;font:700 13px/1 var(--mono)}
+.dlg-fundo{position:fixed;inset:0;z-index:10050;background:rgba(10,12,15,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.dlg-fundo[hidden]{display:none}
+.dlg{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;width:min(420px,100%);max-height:calc(100vh - 32px);overflow-y:auto;padding:18px}
+.dlg h2{margin:0 0 12px}
+.pf-it{display:flex;align-items:center;gap:10px;width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;margin:0 0 8px;background:transparent;color:var(--ink);text-align:left;font-size:15px}
+.pf-it[aria-current="true"]{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber) inset}
+.pf-it small{display:block;color:var(--dim);font-size:12px;font-weight:400}
+.boas{position:fixed;inset:0;z-index:10060;background:var(--asfalto);color:#e8e6e1;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto}
+.boas[hidden]{display:none}
+.boas-c{width:min(400px,100%)}
+.boas-c img{width:72px;height:72px;border-radius:18px}
+.boas-c h1{font-family:var(--cond);font-size:30px;letter-spacing:.04em;margin:14px 0 4px}
+.boas-c p{color:#9aa3ad;margin:0 0 18px}
+.boas-c label{display:block;font-size:13px;color:#b9c0c8;margin:0 0 12px}
+.boas-c input{display:block;width:100%;margin-top:4px;padding:11px 12px;font-size:16px;border-radius:9px;border:1px solid #3a424c;background:#1f252c;color:#fff}
+.boas-c .btn{width:100%;justify-content:center;padding:13px;font-size:15px;margin-top:6px}
+.boas-c input[hidden]{display:none}
+.boas-c .btn.amber{background:var(--amber);color:#15191E;border-color:var(--amber)}
+.boas-c .btn.lig{background:transparent;color:#e8e6e1;border-color:#3a424c}
 .gaveta-fundo{position:fixed;inset:0;z-index:10020;background:rgba(10,12,15,.5);opacity:0;pointer-events:none;transition:opacity .2s}
 .gaveta-fundo.on{opacity:1;pointer-events:auto}
 .gaveta-x{margin-left:auto;width:36px;height:36px;border-radius:8px;color:#c4cad1;font-size:18px;display:flex;align-items:center;justify-content:center}
@@ -322,12 +344,13 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
 <aside class="side" id="gaveta" aria-label="Menu" aria-hidden="true">
   <div class="brand">
     <div class="brand-mark"><img src="icons/icon-192.png" alt="" width="36" height="36"></div>
-    <div><div class="brand-name">TACÓGRAFO</div><div class="brand-sub">Controle de jornada · Caio</div></div>
+    <div><div class="brand-name">TACÓGRAFO</div><div class="brand-sub" id="brandSub">Controle de jornada</div></div>
     <button class="gaveta-x" id="gavetaX" aria-label="Fechar menu">✕</button>
   </div>
+  <button class="conta-btn" id="contaBtn" aria-haspopup="dialog"><span class="conta-av" id="contaAv">?</span><span class="conta-nm" id="contaNm">Conta</span><span aria-hidden="true">▾</span></button>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v3.9 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v4.0 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -362,8 +385,23 @@ const ACTN=['Descanso','Disponibilidade','Outros Trabalhos','Condução'];
 const DIAS=['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
 const FERIADOS=['2026-01-01','2026-02-17','2026-04-03','2026-04-05','2026-04-25','2026-05-01','2026-06-04','2026-06-10','2026-08-15','2026-10-05','2026-11-01','2026-12-01','2026-12-08','2026-12-25',
 '2025-01-01','2025-03-04','2025-04-18','2025-04-20','2025-04-25','2025-05-01','2025-06-10','2025-06-19','2025-08-15','2025-10-05','2025-11-01','2025-12-01','2025-12-08','2025-12-25'];
+const APK_URL='https://github.com/caiohenrique133/Apk-Leitor-tacografo/releases/latest/download/Tacografo.apk'; // onde se descarrega a app Android
 const REST_TH=420;            // descanso qualificado que separa turnos: ≥7h contínuas
-const LS='tacho_caio_v2';
+/* ============ CONTAS: vários condutores no mesmo aparelho, cada um com os seus dados ============ */
+const PERFIS_K='tacho_perfis',LS_LEGADO='tacho_caio_v2';
+const pfChaves=id=>id==='p0'?{ls:LS_LEGADO,idb:'tacho',fdb:'tacho_fotos'}:{ls:'tacho_v3_'+id,idb:'tacho_'+id,fdb:'tacho_fotos_'+id};
+const PF=(()=>{let r=null;try{r=JSON.parse(localStorage.getItem(PERFIS_K)||'null')}catch(e){}
+  if(!r||!Array.isArray(r.lista)){r={lista:[],ativo:''};
+    // dados de antes das contas passam a ser a primeira conta, sem mudarem de sítio
+    let v=null;try{v=JSON.parse(localStorage.getItem(LS_LEGADO)||'null')}catch(e){}
+    if(v){const p=v.perfil||{};r.lista.push({id:'p0',nome:[p.nome,p.ap].filter(Boolean).join(' ')||'Condutor 1',criado:Date.now()});r.ativo='p0';
+      try{localStorage.setItem(PERFIS_K,JSON.stringify(r))}catch(e){}}}
+  if(!r.lista.find(p=>p.id===r.ativo))r.ativo=r.lista[0]?r.lista[0].id:'';
+  return r})();
+const pfGuarda=()=>{try{localStorage.setItem(PERFIS_K,JSON.stringify(PF))}catch(e){}};
+const pfAtivo=()=>PF.lista.find(p=>p.id===PF.ativo)||null;
+const PFK=pfChaves(PF.ativo||'novo');
+const LS=PFK.ls;
 
 /* ============ ESTADO ============ */
 let RAW=[];                    // ficheiros parseados
@@ -377,8 +415,8 @@ if(!S.bisLim)S.bisLim=45*60;
 if(!S.perfil)S.perfil={nome:'',ap:'',cartao:'',empresa:'',matricula:'',base:'',contacto:''};
 if(!S.nuvem)S.nuvem={url:'',key:'',token:'',refresh:'',uid:'',email:'',ultima:0,auto:true,fich:true};
 if(!S.contrato)S.contrato={};
-if(!S.dest)S.dest=[["Pingo Doce Azambuja","azambuja"],["Santacarnes/Montalva T. Novas","montalva"],["Palmela","palmela"],["Maporal","maporal"],["Valsabor","valsabor"],["Santo Tirso","santo tirso"],["Lidl Torres Novas","lidl torres"],["Pingo Doce Algoz","algoz"],["Chep","chep"],["Stec","stec"],["Milharado","milharado"],["Auchan","auchan"],["Ifico","ifico"],["Domplex","dompl"],["Aldi","aldi"],["Transferências","transfer"]];
-const save=()=>{try{S.carim=Date.now();localStorage.setItem(LS,JSON.stringify(S))}catch(e){}};
+if(!S.dest)S.dest=[];
+const save=()=>{if(!PF.ativo)return;try{S.carim=Date.now();localStorage.setItem(LS,JSON.stringify(S))}catch(e){}};
 
 /* ============ UTIL ============ */
 const $=s=>document.querySelector(s);
@@ -1679,6 +1717,8 @@ function conta(){
     ${IDENT?`<button class="btn" id="pDoCartao">Preencher a partir do cartão lido</button>`:''}</div>
   </div>
 
+  ${pfSecao()}
+
   ${(()=>{const c=C(),DIAS=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
     const num=(k,lab,val,ph)=>`<label class="note" style="min-width:120px">${lab}<input class="mini" data-c="${k}" value="${val}" placeholder="${ph||''}"></label>`;
     return `<h2>A minha escala</h2>
@@ -1754,7 +1794,7 @@ function manCond(m){
 /* ============ FOTOS DOS DISCOS — pasta própria (IndexedDB 'tacho_fotos') ============ */
 const FDB={
   db:null,
-  open(){if(this.db)return Promise.resolve(this.db);return new Promise((ok,ko)=>{const r=indexedDB.open('tacho_fotos',1);
+  open(){if(this.db)return Promise.resolve(this.db);return new Promise((ok,ko)=>{const r=indexedDB.open(PFK.fdb,1);
     r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('meta'))d.createObjectStore('meta',{keyPath:'id'});if(!d.objectStoreNames.contains('img'))d.createObjectStore('img')};
     r.onsuccess=()=>{this.db=r.result;ok(r.result)};r.onerror=()=>ko(r.error)})},
   async lista(){const db=await this.open();return new Promise((ok,ko)=>{const q=db.transaction('meta').objectStore('meta').getAll();q.onsuccess=()=>ok(q.result||[]);q.onerror=()=>ko(q.error)})},
@@ -2026,7 +2066,7 @@ async function camFecha(){
 }
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&CAM.stream)camPara();else if(!document.hidden&&$('#camView')&&!$('#camView').hidden&&!CAM.stream)camLiga()});
 /* botão "voltar" do Android: fecha primeiro a câmara ou o visualizador */
-window.voltarApp=()=>{if(gavetaAberta()){gavetaFecha();return true}if($('#camView')&&!$('#camView').hidden){camFecha();return true}if(FV.id){fotoFecha();return true}return false};
+window.voltarApp=()=>{if($('#contasDlg')&&!$('#contasDlg').hidden){contasFecha();return true}if($('#boas')&&!$('#boas').hidden&&PF.ativo){boasFecha();return true}if(gavetaAberta()){gavetaFecha();return true}if($('#camView')&&!$('#camView').hidden){camFecha();return true}if(FV.id){fotoFecha();return true}return false};
 function manual(){
   const D=MDRAFT;
   const PD=periodo();
@@ -2710,7 +2750,7 @@ async function emailAnexo(tipo,mes){
   return {nome:'backup_tacografo_'+hojeLocal()+'.json',blob:new Blob([JSON.stringify(estadoLocal(),null,1)],{type:'application/json'}),sub:'Backups'};
 }
 function emailAtualizar(){
-  const url='https://github.com/caiohenrique133/Apk-Leitor-tacografo/releases/latest/download/Tacografo.apk';
+  const url=APK_URL;
   if(confirm('Esta versão da app ainda não consegue pôr o ficheiro em anexo.\n\nQueres descarregar a versão nova da app? Instala-a por cima da atual — os dados ficam.'))location.href=url;
 }
 function emailHTML(){
@@ -2924,7 +2964,9 @@ function bind(){
   const hR=$('#hRepor');if(hR)hR.onclick=()=>{const c=C();c.ampMax=13*60;c.noiteIni='22:00';c.noiteFim='07:00';S.contrato=c;save();render()};
   // --- conta e perfil ---
   document.querySelectorAll('[data-p]').forEach(el=>el.onchange=e=>{S.perfil[e.target.dataset.p]=e.target.value.trim()});
-  const pG=$('#pGuardar');if(pG)pG.onclick=()=>{document.querySelectorAll('[data-p]').forEach(el=>{S.perfil[el.dataset.p]=el.value.trim()});save();nvEstado('Perfil guardado.','ok');render()};
+  pfBind();
+  const pG=$('#pGuardar');if(pG)pG.onclick=()=>{const antes=[S.perfil.nome,S.perfil.ap].filter(Boolean).join(' ');document.querySelectorAll('[data-p]').forEach(el=>{S.perfil[el.dataset.p]=el.value.trim()});save();
+    const a=pfAtivo(),agora=[S.perfil.nome,S.perfil.ap].filter(Boolean).join(' ');if(a&&agora&&(a.nome===antes||/^Condutor \d+$/.test(a.nome))){a.nome=agora;pfGuarda();pfTopo()}nvEstado('Perfil guardado.','ok');render()};
   const pC=$('#pDoCartao');if(pC)pC.onclick=()=>{
     if(!IDENT)return;
     S.perfil.nome=IDENT.nome||S.perfil.nome;S.perfil.ap=IDENT.ap||S.perfil.ap;S.perfil.cartao=IDENT.card||S.perfil.cartao;
@@ -3102,12 +3144,104 @@ $('#fileIn').onchange=async e=>{
   // persistir ficheiros em IndexedDB simples (localStorage não chega): base64 no LS se couber
   render&&rebuild();
 };
+/* ============ CONTAS: boas-vindas, troca e gestão ============ */
+const pfIni=n=>(n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?';
+function pfTopo(){const a=pfAtivo(),n=a?a.nome:'';
+  $('#contaNm').textContent=n||'Conta';$('#contaAv').textContent=pfIni(n);
+  $('#brandSub').textContent='Controle de jornada'+(n?' · '+n.split(' ')[0]:'');}
+function pfCria(nome,estado){
+  const id=PF.lista.length?'p'+Date.now().toString(36):'p0',k=pfChaves(id);
+  const st=estado&&typeof estado==='object'?estado:{};
+  st.perfil=Object.assign({nome:'',ap:'',cartao:'',empresa:'',matricula:'',base:'',contacto:''},st.perfil||{});
+  if(!st.perfil.nome){const w=nome.trim().split(/\s+/);st.perfil.nome=w.shift()||'';st.perfil.ap=st.perfil.ap||w.join(' ')}
+  try{localStorage.setItem(k.ls,JSON.stringify(st))}catch(e){alert('Sem espaço para criar a conta.');return}
+  PF.lista.push({id,nome:nome.trim(),criado:Date.now()});PF.ativo=id;pfGuarda();location.reload();
+}
+function pfTroca(id){if(id===PF.ativo||!PF.lista.find(p=>p.id===id))return;PF.ativo=id;pfGuarda();location.reload()}
+const idbApaga=n=>new Promise(ok=>{try{const r=indexedDB.deleteDatabase(n);r.onsuccess=r.onerror=()=>ok();r.onblocked=()=>setTimeout(ok,800)}catch(e){ok()}});
+async function pfApaga(id){
+  const a=PF.lista.find(p=>p.id===id);if(!a)return;
+  if(!confirm(`Apagar a conta "${a.nome}" e todos os dados dela neste aparelho (ficheiros do cartão, notas e fotos)?\n\nFaz antes um backup se quiseres guardar alguma coisa. Isto não se pode desfazer.`))return;
+  if(prompt(`Para confirmar, escreve APAGAR`)?.trim().toUpperCase()!=='APAGAR')return;
+  const k=pfChaves(id);
+  if(id===PF.ativo){try{IDB._db&&IDB._db.close();IDB._db=null}catch(e){}try{FDB.db&&FDB.db.close();FDB.db=null}catch(e){}}
+  try{localStorage.removeItem(k.ls)}catch(e){}
+  await idbApaga(k.idb);await idbApaga(k.fdb);
+  PF.lista=PF.lista.filter(p=>p.id!==id);if(PF.ativo===id)PF.ativo=PF.lista[0]?PF.lista[0].id:'';
+  pfGuarda();location.reload();
+}
+function pfRenomeia(id){const a=PF.lista.find(p=>p.id===id);if(!a)return;
+  const n=prompt('Nome da conta',a.nome);if(n==null||!n.trim())return;a.nome=n.trim().slice(0,60);pfGuarda();pfTopo();render()}
+function pfSecao(){
+  const dt=t=>t?new Date(t).toLocaleDateString('pt-PT'):'';
+  return `<h2>Contas neste aparelho</h2>
+  <div class="card">
+    ${PF.lista.map(p=>`<div class="row" style="align-items:center;margin:0 0 8px">
+      <span class="conta-av">${esc(pfIni(p.nome))}</span>
+      <span style="flex:1;min-width:120px"><b>${esc(p.nome)}</b>${p.id===PF.ativo?' <span class="tag ok">EM USO</span>':''}<br><span class="note">${p.criado?'criada em '+dt(p.criado):''}</span></span>
+      ${p.id===PF.ativo?'':`<button class="btn pfUsa" data-id="${p.id}">Usar</button>`}
+      <button class="btn pfRen" data-id="${p.id}">✎ Nome</button>
+      <button class="btn danger pfDel" data-id="${p.id}" aria-label="Apagar conta ${esc(p.nome)}">✕</button></div>`).join('')}
+    <div class="row" style="margin-bottom:0"><button class="btn amber" id="pfNova">＋ Adicionar condutor</button></div>
+  </div>`;
+}
+function pfBind(){
+  document.querySelectorAll('.pfUsa').forEach(b=>b.onclick=()=>pfTroca(b.dataset.id));
+  document.querySelectorAll('.pfRen').forEach(b=>b.onclick=()=>pfRenomeia(b.dataset.id));
+  document.querySelectorAll('.pfDel').forEach(b=>b.onclick=()=>pfApaga(b.dataset.id));
+  const n=$('#pfNova');if(n)n.onclick=()=>boasAbre(true);
+}
+function boasAbre(nova){
+  let el=$('#boas');
+  if(!el){el=document.createElement('div');el.id='boas';el.className='boas';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-labelledby','boasT');document.body.appendChild(el)}
+  el.innerHTML=`<form class="boas-c" id="boasF" autocomplete="off">
+    <img src="icons/icon-192.png" alt="">
+    <h1 id="boasT">${nova?'Novo condutor':'Bem-vindo'}</h1>
+    <p>${nova?'Cada condutor tem os seus próprios dados neste aparelho.':'Controle de jornada, descansos e horas pelo cartão de condutor. Os dados ficam neste aparelho.'}</p>
+    <label>Nome do condutor<input id="boasNome" required maxlength="60" placeholder="Nome e apelido" autocomplete="name"></label>
+    <label>N.º do cartão de condutor (opcional)<input id="boasCartao" maxlength="20" inputmode="text"></label>
+    <button class="btn amber" type="submit">Começar</button>
+    <button class="btn lig" type="button" id="boasBk">Tenho um backup (.json)</button>
+    ${nova?'<button class="btn lig" type="button" id="boasX">Cancelar</button>':''}
+    <input type="file" id="boasIn" accept=".json,application/json" hidden>
+  </form>`;
+  el.hidden=false;document.body.style.overflow='hidden';
+  setTimeout(()=>{const i=$('#boasNome');if(i)i.focus()},50);
+  $('#boasF').onsubmit=e=>{e.preventDefault();const nome=$('#boasNome').value.trim();if(!nome){$('#boasNome').focus();return}
+    const c=$('#boasCartao').value.trim();pfCria(nome,c?{perfil:{cartao:c}}:null)};
+  $('#boasBk').onclick=()=>$('#boasIn').click();
+  $('#boasIn').onchange=async e=>{let b;try{b=JSON.parse(await e.target.files[0].text())}catch(x){alert('Ficheiro de backup inválido.');e.target.value='';return}
+    if(!b||typeof b!=='object'){alert('Ficheiro de backup inválido.');return}
+    const p=b.perfil||{},nome=[p.nome,p.ap].filter(Boolean).join(' ')||$('#boasNome').value.trim()||('Condutor '+(PF.lista.length+1));
+    pfCria(nome,b)};
+  const x=$('#boasX');if(x)x.onclick=boasFecha;
+}
+function boasFecha(){const el=$('#boas');if(el){el.hidden=true;el.innerHTML=''}document.body.style.overflow=''}
+function contasAbre(){
+  let el=$('#contasDlg');
+  if(!el){el=document.createElement('div');el.id='contasDlg';el.className='dlg-fundo';document.body.appendChild(el);
+    el.onclick=e=>{if(e.target===el)contasFecha()}}
+  el.innerHTML=`<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="contasT"><h2 id="contasT">Contas</h2>
+    ${PF.lista.map(p=>`<button class="pf-it" data-id="${p.id}" ${p.id===PF.ativo?'aria-current="true"':''}><span class="conta-av">${esc(pfIni(p.nome))}</span><span style="flex:1"><b>${esc(p.nome)}</b><small>${p.id===PF.ativo?'Em uso':'Mudar para esta conta'}</small></span></button>`).join('')}
+    <div class="row" style="margin-bottom:0"><button class="btn amber" id="cdNova">＋ Adicionar condutor</button><button class="btn" id="cdGerir">Gerir contas</button><button class="btn" id="cdX">Fechar</button></div></div>`;
+  el.hidden=false;
+  el.querySelectorAll('.pf-it').forEach(b=>b.onclick=()=>{if(b.dataset.id===PF.ativo)contasFecha();else pfTroca(b.dataset.id)});
+  $('#cdNova').onclick=()=>{contasFecha();boasAbre(true)};
+  $('#cdGerir').onclick=()=>{contasFecha();gavetaFecha(true);TAB='conta';nav();render();scrollTo(0,0)};
+  $('#cdX').onclick=contasFecha;
+  const f=el.querySelector('.pf-it[aria-current]');if(f)f.focus();
+}
+function contasFecha(){const el=$('#contasDlg');if(el)el.hidden=true}
+$('#contaBtn').onclick=contasAbre;
+pfTopo();
+if(!PF.ativo)boasAbre(false);
 nav();render();
 /* PWA */
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 /* Guardar/repor ficheiros do cartão entre sessões via IndexedDB */
 const IDB={
-  open:()=>new Promise((ok,ko)=>{const r=indexedDB.open('tacho',1);r.onupgradeneeded=()=>r.result.createObjectStore('files');r.onsuccess=()=>ok(r.result);r.onerror=ko}),
+  _db:null,
+  open:()=>IDB._db?Promise.resolve(IDB._db):new Promise((ok,ko)=>{const r=indexedDB.open(PFK.idb,1);r.onupgradeneeded=()=>r.result.createObjectStore('files');r.onsuccess=()=>{IDB._db=r.result;ok(r.result)};r.onerror=ko}),
   set:async(k,v)=>{const db=await IDB.open();return new Promise((ok,ko)=>{const t=db.transaction('files','readwrite');t.objectStore('files').put(v,k);t.oncomplete=ok;t.onerror=ko})},
   get:async(k)=>{const db=await IDB.open();return new Promise((ok,ko)=>{const t=db.transaction('files');const rq=t.objectStore('files').get(k);rq.onsuccess=()=>ok(rq.result);rq.onerror=ko})},
   chaves:async()=>{const db=await IDB.open();return new Promise((ok,ko)=>{const t=db.transaction('files');const rq=t.objectStore('files').getAllKeys();rq.onsuccess=()=>ok(rq.result.map(String));rq.onerror=ko})},
