@@ -86,12 +86,19 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false); // pré-visualização da câmara dentro da app
 
         web.addJavascriptInterface(new UsbPonte(), "AndroidUsb");
+        web.setDownloadListener(new android.webkit.DownloadListener() {
+            @Override
+            public void onDownloadStart(String url, String ua, String cd, String mime, long len) {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception e) { }
+            }
+        });
 
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 Uri u = r.getUrl();
-                if (HOST.equals(u.getHost())) return false;
+                // o APK abre-se no navegador do telemóvel, que o descarrega
+                if (HOST.equals(u.getHost()) && !String.valueOf(u.getPath()).endsWith(".apk")) return false;
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception e) { }
                 return true;
             }

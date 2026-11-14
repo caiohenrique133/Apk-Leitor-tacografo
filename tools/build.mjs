@@ -52,5 +52,8 @@ fs.writeFileSync(path.join(DIST,'sw.js'),(await terser(sw,{compress:true,mangle:
 fs.copyFileSync(path.join(RAIZ,'manifest.json'),path.join(DIST,'manifest.json'));
 for(const f of fs.readdirSync(path.join(RAIZ,'icons')))fs.copyFileSync(path.join(RAIZ,'icons',f),path.join(DIST,'icons',f));
 
+/* app Android (colocada em apk/ pelo GitHub Actions a cada compilação) */
+if(fs.existsSync(path.join(RAIZ,'apk','Tacografo.apk')))fs.copyFileSync(path.join(RAIZ,'apk','Tacografo.apk'),path.join(DIST,'Tacografo.apk'));
+
 const kb=f=>(fs.statSync(f).size/1024).toFixed(0)+' KB';
 console.log('dist/ pronto · index.html',kb(path.join(RAIZ,'index.html')),'→',kb(path.join(DIST,'index.html')));

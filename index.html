@@ -385,7 +385,7 @@ const ACTN=['Descanso','Disponibilidade','Outros Trabalhos','Condução'];
 const DIAS=['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
 const FERIADOS=['2026-01-01','2026-02-17','2026-04-03','2026-04-05','2026-04-25','2026-05-01','2026-06-04','2026-06-10','2026-08-15','2026-10-05','2026-11-01','2026-12-01','2026-12-08','2026-12-25',
 '2025-01-01','2025-03-04','2025-04-18','2025-04-20','2025-04-25','2025-05-01','2025-06-10','2025-06-19','2025-08-15','2025-10-05','2025-11-01','2025-12-01','2025-12-08','2025-12-25'];
-const APK_URL='https://github.com/caiohenrique133/Apk-Leitor-tacografo/releases/latest/download/Tacografo.apk'; // onde se descarrega a app Android
+const APK_URL='https://apk-leitor-tacografo.vercel.app/Tacografo.apk'; // onde se descarrega a app Android
 const REST_TH=420;            // descanso qualificado que separa turnos: ≥7h contínuas
 /* ============ CONTAS: vários condutores no mesmo aparelho, cada um com os seus dados ============ */
 const PERFIS_K='tacho_perfis',LS_LEGADO='tacho_caio_v2';
@@ -2751,7 +2751,11 @@ async function emailAnexo(tipo,mes){
 }
 function emailAtualizar(){
   const url=APK_URL;
-  if(confirm('Esta versão da app ainda não consegue pôr o ficheiro em anexo.\n\nQueres descarregar a versão nova da app? Instala-a por cima da atual — os dados ficam.'))location.href=url;
+  if(!confirm('Esta versão da app ainda não consegue pôr o ficheiro em anexo.\n\nQueres descarregar a versão nova da app? Instala-a por cima da atual — os dados ficam.'))return;
+  if(!AND){location.href=url;return}
+  // as versões antigas da app não descarregam ficheiros: o endereço abre-se no Chrome
+  try{navigator.clipboard.writeText(url)}catch(e){}
+  alert('Abre o Chrome, cola este endereço e instala o ficheiro descarregado:\n\n'+url+'\n\n(o endereço já foi copiado)');
 }
 function emailHTML(){
   const ms=[...new Set(ROWS.map(r=>r.iso.slice(0,7)))].reverse();

@@ -20,7 +20,8 @@ para que cada push chegue logo ao telemóvel.
 A pasta `android/` tem a app nativa: abre a versão do Vercel e dá-lhe acesso direto ao leitor de cartões USB
 (ponte `window.AndroidUsb`), que o Chrome bloqueia em páginas web. Cada alteração em `android/` é compilada
 pelo GitHub Actions e publicada em **Releases**:
-https://github.com/caiohenrique133/Apk-Leitor-tacografo/releases/latest/download/Tacografo.apk
+https://apk-leitor-tacografo.vercel.app/Tacografo.apk
+(o GitHub Actions coloca cada APK novo em `apk/` e o Vercel publica-o; o repositório é privado)
 
 ## Código fonte e versão publicada
 
