@@ -8,6 +8,11 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tacógrafo">
+<meta name="format-detection" content="telephone=no">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
@@ -81,6 +86,9 @@ h2::after{content:"";flex:1;height:1px;background:var(--line)}
 .boas-c input[hidden]{display:none}
 .boas-c .btn.amber{background:var(--amber);color:#15191E;border-color:var(--amber)}
 .boas-c .btn.lig{background:transparent;color:#e8e6e1;border-color:#3a424c}
+.ios-dica{position:fixed;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));z-index:10070;display:flex;gap:10px;align-items:center;background:#1f252c;color:#e8e6e1;border:1px solid #3a424c;border-radius:12px;padding:11px 12px;font-size:14px;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+.ios-dica b{color:var(--amber)}
+.ios-dica button{flex:none;width:34px;height:34px;border-radius:50%;background:transparent;color:#e8e6e1;border:1px solid #3a424c}
 .gaveta-fundo{position:fixed;inset:0;z-index:10020;background:rgba(10,12,15,.5);opacity:0;pointer-events:none;transition:opacity .2s}
 .gaveta-fundo.on{opacity:1;pointer-events:auto}
 .gaveta-x{margin-left:auto;width:36px;height:36px;border-radius:8px;color:#c4cad1;font-size:18px;display:flex;align-items:center;justify-content:center}
@@ -350,7 +358,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   <button class="conta-btn" id="contaBtn" aria-haspopup="dialog"><span class="conta-av" id="contaAv">?</span><span class="conta-nm" id="contaNm">Conta</span><span aria-hidden="true">▾</span></button>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v4.0 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v4.1 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1584,7 +1592,7 @@ function leitor(){
     <div class="row" style="margin:0">
       <span class="sem ${lig?'g':'y'}"></span>
       <b>${lig?'Leitor ligado — '+esc(RD.dev.productName||'leitor de cartões'):'Nenhum leitor ligado'}</b>
-      ${AND?'<span class="tag ok">APP ANDROID</span>':'<span class="tag dim">PÁGINA WEB</span>'}
+      ${AND?'<span class="tag ok">APP ANDROID</span>':IOS?'<span class="tag dim">IPHONE</span>':'<span class="tag dim">PÁGINA WEB</span>'}
     </div>
     ${lig?`<div class="row noprint">
       <button class="btn amber" id="rdLer" ${RD.busy?'disabled':''}>${RD.busy?'A ler…':'⭘ Ler cartão'}</button>
@@ -1597,7 +1605,7 @@ function leitor(){
     :`<div class="row noprint">
       <button class="btn amber" id="rdOn" ${tem?'':'disabled'}>⚡ Ligar ao leitor</button>
       <button class="btn" id="rdAll" ${tem?'':'disabled'}>Ver todos os aparelhos</button></div>`}
-    ${(tem||AND)?'':'<div class="alert MAXIMA"><span class="g">SEM SUPORTE</span> · Este browser não tem WebUSB. No Android usa o Chrome, ou instala a app própria; no iPhone não é possível.</div>'}
+    ${(tem||AND)?'':IOS?'<div class="alert"><span class="g">IPHONE</span> · O iPhone não deixa ligar leitores de cartões a apps. Descarrega o cartão noutro aparelho (leitor de bolso, Android ou computador) e abre aqui o ficheiro .ddd a partir da app Ficheiros, em <b>Carregar</b>.</div>':'<div class="alert MAXIMA"><span class="g">SEM SUPORTE</span> · Este browser não tem WebUSB. No Android usa o Chrome, ou instala a app própria; no iPhone não é possível.</div>'}
   </div>
   ${RD.prog?`<div class="card" id="rdProg">
     <div class="row" style="margin:0 0 8px;justify-content:space-between"><b class="rdEtapa">${esc(RD.prog.etapa||'')}</b><span class="mono rdPct">${RD.prog.total?Math.min(100,Math.round(RD.prog.feito/RD.prog.total*100)):0}%</span></div>
@@ -1846,6 +1854,7 @@ const blobB64=b=>new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(
 async function fotoGuardaAparelho(f,silencio){
   const b=await FDB.img(f.id);if(!b)return 'Foto não encontrada.';
   if(AND&&AND.guardarFoto){const r=AND.guardarFoto(f.nome,f.iso.slice(0,7),await blobB64(b));if(!silencio)alert(r);return r}
+  if(IOS){download(f.nome,b);return}
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=f.nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
 }
 function fotosHTML(){
@@ -2910,7 +2919,17 @@ function dadosMatrix(){
     hm(r.trabalho+r.esp),hm(r.cond),hm(r.ot),hm(r.disp),hm(r.esp),hm(r.pausa),r.km,r.obs,dPT(r.iso.slice(0,7)+'-01').slice(3),r.extra?'SIM':'',r.man?(S.man[r.iso]&&S.man[r.iso].src||'Disco'):'Cartão']);
   return [head,...rows];
 }
+/* iPhone / iPad: os ficheiros vão para a folha de partilha (Guardar em Ficheiros, Mail, WhatsApp…) */
+const IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const STANDALONE=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+async function iosPartilha(name,blob){
+  try{const f=new File([blob],name,{type:blob.type||'application/octet-stream'});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:name});return true}}
+  catch(e){if(e&&e.name==='AbortError')return true}
+  return false;
+}
 function download(name,blob){
+  if(IOS&&!AND){iosPartilha(name,blob).then(ok=>{if(!ok){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),8000)}});return}
   if(AND&&AND.guardar){
     const fr=new FileReader();
     fr.onload=()=>{try{const r=AND.guardar(name,String(fr.result).split(',')[1]);alert(r||('Guardado em Transferências: '+name))}catch(e){alert('Não consegui guardar o ficheiro.')}};
@@ -3239,6 +3258,12 @@ function contasFecha(){const el=$('#contasDlg');if(el)el.hidden=true}
 $('#contaBtn').onclick=contasAbre;
 pfTopo();
 if(!PF.ativo)boasAbre(false);
+/* iPhone no Safari: mostrar como instalar no ecrã principal */
+if(IOS&&!STANDALONE&&!AND){let v=null;try{v=localStorage.getItem('tacografo-ios-dica')}catch(e){}
+  if(!v){const d=document.createElement('div');d.className='ios-dica';d.setAttribute('role','note');
+    d.innerHTML='<span style="flex:1">Para instalar no iPhone: toca em <b>Partilhar</b> e depois em <b>Adicionar ao ecrã principal</b>.</span><button aria-label="Fechar">✕</button>';
+    d.querySelector('button').onclick=()=>{d.remove();try{localStorage.setItem('tacografo-ios-dica','1')}catch(e){}};
+    document.body.appendChild(d)}}
 nav();render();
 /* PWA */
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
