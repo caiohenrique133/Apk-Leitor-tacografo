@@ -174,6 +174,22 @@ tr.sub td{color:var(--dim)}
 .sem{width:16px;height:16px;border-radius:50%;display:inline-block;vertical-align:-3px;margin-right:8px;box-shadow:0 0 0 3px var(--panel2)}
 .sem.g{background:var(--ok)}.sem.y{background:var(--amber)}.sem.r{background:var(--bad)}
 .alert{border:1px solid var(--line);border-left:4px solid var(--info);background:var(--panel);border-radius:8px;padding:10px 12px;margin:8px 0}
+.inf-val{display:inline-block;background:var(--amber);color:#15191E;font-weight:700;border-radius:8px;padding:7px 14px;font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.chip-f{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:6px 12px;font-size:13px}
+.chip-f[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.inf-l{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-top:10px}
+.inf{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--info);border-radius:10px;padding:12px 14px;break-inside:avoid}
+.inf.GRAVE{border-left-color:var(--amber)}.inf.MUITO_GRAVE{border-left-color:#e8742c}.inf.MAXIMA{border-left-color:var(--bad)}
+.inf-top{display:flex;justify-content:space-between;align-items:center}
+.inf-g{font:600 11px/1 var(--mono);letter-spacing:.06em;color:var(--info)}
+.inf.GRAVE .inf-g{color:var(--warn)}.inf.MUITO_GRAVE .inf-g{color:#e8742c}.inf.MAXIMA .inf-g{color:var(--bad)}
+.inf-ic{font-size:18px;color:var(--info)}.inf.GRAVE .inf-ic{color:var(--amber)}.inf.MUITO_GRAVE .inf-ic{color:#e8742c}.inf.MAXIMA .inf-ic{color:var(--bad)}
+.inf h3{margin:6px 0 8px;font-size:15px;line-height:1.3}
+.inf-k{font-size:12px;color:var(--dim);margin-top:6px}
+.inf-v{font-size:14px;font-family:var(--mono)}
+.inf-d{font-family:inherit}
+.inf details{margin-top:8px;font-size:13px}.inf summary{cursor:pointer;color:var(--dim)}.inf details p{margin:6px 0 0}
 .alert.LEVE{border-left-color:var(--info)}.alert.GRAVE{border-left-color:var(--amber)}
 .alert.MUITO_GRAVE{border-left-color:#e8742c}.alert.MAXIMA{border-left-color:var(--bad)}
 .alert .g{font-size:10.5px;font-weight:700;letter-spacing:.08em}
@@ -358,7 +374,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   <button class="conta-btn" id="contaBtn" aria-haspopup="dialog"><span class="conta-av" id="contaAv">?</span><span class="conta-nm" id="contaNm">Conta</span><span aria-hidden="true">▾</span></button>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v4.1 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v4.2 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -478,7 +494,7 @@ function parseDDD(buf){
       const nA=(recLen-12)>>1, raw=rd(off+12,nA*2), ch=[];
       for(let k=0;k<nA;k++){
         const v=raw[2*k]<<8|raw[2*k+1];
-        ch.push({t:Math.floor(ts/60)+(v&0x7FF),a:(v>>11)&3,ins:((v>>13)&1)===0});
+        ch.push({t:Math.floor(ts/60)+(v&0x7FF),a:(v>>11)&3,ins:((v>>13)&1)===0,kn:((v>>14)&1)===1});
       }
       return {prev,recLen,ok:true,dia:{ts,dist,ch}};
     };
@@ -1111,11 +1127,13 @@ function salarioMeses(){
 function eur(v){return (Math.round(v*100)/100).toFixed(2).replace('.',',')+' €'}
 
 /* ============ MOTOR: linha temporal global → turnos ============ */
-let SEGS=[],SHIFTS=[],ROWS=[],RESTS=[],WEEKS=[],MONTHS={},BIPER=[],IDENT=null,DL=null,VEHS=[],CTRLS=[],EVTS=[],REINT=[];
+let SEGS=[],SHIFTS=[],ROWS=[],RESTS=[],WEEKS=[],MONTHS={},BIPER=[],IDENT=null,DL=null,VEHS=[],CTRLS=[],EVTS=[],REINT=[],PLACES=[],UNK=[],ULTREG=0;
 function rebuild(){
   const evMap=new Map(), distMap={};
   IDENT=null;DL=null;VEHS=[];CTRLS=[];EVTS=[];
+  const plMap=new Map();
   for(const f of RAW){
+    for(const pl of (f.places||[]))plMap.set(pl.t+'_'+pl.tipo,pl);
     if(f.ident)IDENT=f.ident;
     if(f.dl&&(!DL||f.dl>DL))DL=f.dl;
     VEHS.push(...f.vehicles);CTRLS.push(...f.controls);EVTS.push(...f.events.map(e=>({...e,fault:false})),...f.faults.map(e=>({...e,fault:true})));
@@ -1139,6 +1157,15 @@ function rebuild(){
     if(p&&p.a===s.a&&p.ins===s.ins&&p.t1===s.t0)p.t1=s.t1;else M.push(s)}SEGS=M}
   // dias inseridos manualmente (discos): sobrepõem-se ao que existir na mesma hora
   const MSEG=manualSegs();
+  PLACES=[...plMap.values()].sort((a,b)=>a.t-b.t);
+  ULTREG=ev.length?ev[ev.length-1].t:0;
+  // períodos com o cartão fora e atividade desconhecida (sem entrada manual ao voltar a inserir o cartão)
+  UNK=[];
+  for(let j=0;j+1<ev.length;j++){const e=ev[j];if(e.ins||e.kn!==false)continue;
+    const t0=e.t,t1=ev[j+1].t;if(t1<=t0)continue;
+    if(MSEG.some(m=>m.t0<t1&&m.t1>t0))continue;   // coberto por um disco introduzido à mão
+    const u=UNK[UNK.length-1];if(u&&u.t1===t0)u.t1=t1;else UNK.push({t0,t1})}
+  UNK=UNK.filter(u=>u.t1-u.t0>=2);
   if(MSEG.length){
     for(const m of MSEG)SEGS=carve(SEGS,m.t0,m.t1);
     SEGS=SEGS.concat(MSEG).sort((x,y)=>x.t0-y.t0);
@@ -1326,8 +1353,6 @@ function buildAlerts(){
     {const c=C();
       if(c.ampMax&&c.ampMax!==13*60&&r.jornada>c.ampMax&&!(r.jornada>13*60&&c.ampMax<13*60))
         add('LEVE',r.iso,'dia','Amplitude '+hm(r.jornada)+' acima da definida na Conta ('+hm(c.ampMax)+')','Horário de trabalho (aba Conta)');
-      const nt=minNoturnos(r);
-      if(c.noiteAviso&&nt>0&&r.trabalho>10*60)add('LEVE',r.iso,'dia','Turno com '+hm(nt)+' de trabalho noturno ('+c.noiteIni+'–'+c.noiteFim+') e '+hm(r.trabalho)+' de trabalho (> 10h)','Diretiva 2002/15/CE, art. 7.º — trabalho noturno');
     }
     // a amplitude é avaliada junto com o descanso que se lhe segue (lógica das 24h, mais abaixo);
     // aqui fica só o último turno, que ainda não tem descanso a seguir para ser avaliado
@@ -1367,6 +1392,7 @@ function buildAlerts(){
     if(gap>144*60)add('MUITO_GRAVE',wk[k].iso,'dia','Novo descanso semanal iniciado '+hm(gap)+' após o fim do anterior (> 144h / 6×24h)','Reg. 561/2006, art. 8.º/6');}
   for(const c of condContinua())add('GRAVE',dISO(new Date(L(c.t)*60000)),'dia','Condução contínua '+hm(c.dur)+' sem pausa de 45 min','Reg. 561/2006, art. 7.º');
   for(const x of REINT)add('LEVE',dISO(new Date(L(x.t0)*60000)),'dia','Cartão retirado durante '+hm(x.t1-x.t0)+' registado como '+ACTN[x.a].toLowerCase()+' — tratado como descanso na análise (verifica a entrada manual)','Reg. 165/2014, art. 34.º');
+  for(const x of infNovas())add(x.g,dISO(new Date(L(x.ini)*60000)),'dia',x.tit+' — '+x.det,x.lb);
   if(DL){const dias=Math.floor(Date.now()/86400000-DL/86400);
     if(dias>28)add('GRAVE',dISO(new Date(DL*1000)),'geral','Última descarga do cartão há '+dias+' dias (prazo: 28)','Reg. (UE) 165/2014, art. 33.º');}
   return A;
@@ -1756,7 +1782,7 @@ function conta(){
       <label class="note">Início do trabalho noturno<input id="hNi" type="time" value="${esc(c.noiteIni)}"></label>
       <label class="note">Fim do trabalho noturno<input id="hNf" type="time" value="${esc(c.noiteFim)}"></label>
     </div>
-    <div class="row"><label class="note"><input type="checkbox" id="hAviso" ${c.noiteAviso?'checked':''}> Avisar nos Alertas quando um turno com trabalho noturno passa das 10h de trabalho</label></div>
+    <div class="row"><span class="note">Esta janela serve para o acréscimo noturno. Na Fiscalização, o limite de 10h de trabalho em 24h usa o período legal das 0h às 5h.</span></div>
     <div class="row"><button class="btn amber" id="hGuardar">Guardar horário</button><button class="btn" id="hRepor">Repor (13:00 · 22:00–07:00)</button></div>
     <div class="kgrid" style="margin-top:8px">
       ${kpi('Turnos acima de '+hm(c.ampMax),acima,acima?'warn':'ok','amplitude definida')}
@@ -2443,6 +2469,101 @@ function alertas(){
 }
 
 /* ---- Fiscalização ---- */
+/* ============ INFRAÇÕES (lista com período e detalhes, como nos leitores de cartão) ============ */
+const segSoma=(t0,t1,acts)=>{let m=0;for(const s of SEGS){if(s.t1<=t0)continue;if(s.t0>=t1)break;if(acts.includes(s.a))m+=Math.min(s.t1,t1)-Math.max(s.t0,t0)}return m};
+const NOITE_LEGAL=[0,300]; // 00:00–05:00 (DL 237/2007, art. 6.º/5)
+function segNoturno(t0,t1){ // minutos de trabalho (condução + outros trabalhos) entre as 0h e as 5h
+  const [ni,nf]=NOITE_LEGAL;let tot=0;
+  for(const s of SEGS){if(s.t1<=t0)continue;if(s.t0>=t1)break;if(s.a!==2&&s.a!==3)continue;
+    const a0=L(Math.max(s.t0,t0)),a1=L(Math.min(s.t1,t1));
+    for(let d=-1;d<=1;d++){const base=Math.floor(a0/1440)*1440+d*1440;let a=base+ni,b=base+nf;if(b<=a)b+=1440;tot+=Math.max(0,Math.min(a1,b)-Math.max(a0,a))}}
+  return tot;
+}
+function infNovas(){ // regras que só esta lista acrescenta
+  const out=[],c=C();
+  for(const u of UNK)out.push({k:'manual',g:'LEVE',tit:'Falta entrada manual de dados',ini:u.t0,fim:u.t1,
+    det:'Não indicaste a atividade enquanto o cartão esteve fora ('+hm(u.t1-u.t0)+') quando voltaste a inserir o cartão.',
+    lb:'Reg. (UE) 165/2014, art. 34.º/3',info:'Ao voltar a inserir o cartão, o tacógrafo pergunta o que fizeste enquanto esteve fora (normalmente repouso). Sem essa resposta o período fica «desconhecido» no cartão.'});
+  // símbolo do país no início e no fim de cada período de trabalho diário
+  if(PLACES.length){const p0=PLACES[0].t/60;
+    const tem=(a,b,par)=>PLACES.some(p=>p.tipo%2===par&&p.t/60>=a&&p.t/60<=b);
+    ROWS.forEach((r,i)=>{if(r.man||r.est||r.st<p0)return;
+      const ant=i?ROWS[i-1].en:r.st-1440,seg=ROWS[i+1]?ROWS[i+1].st:null;
+      const inf={k:'pais',g:'LEVE',tit:'Símbolo do país não inserido no aparelho de controlo',lb:'Reg. (UE) 165/2014, art. 34.º/7',
+        info:'Tens de introduzir o símbolo do país onde começa e onde acaba cada período de trabalho diário.'};
+      if(!tem(ant,r.en,0))out.push({...inf,ini:r.st,fim:null,det:'Falta o país no início do período de trabalho diário.'});
+      if(seg!=null&&!tem(r.st,seg,1))out.push({...inf,ini:r.en,fim:null,det:'Falta o país no fim do período de trabalho diário.'});
+    })}
+  // trabalho noturno: máximo 10h de trabalho em cada 24h
+  for(const r of ROWS){if(r.est)continue;const t1=r.st+1440;
+    const trab=segSoma(r.st,t1,[2,3]);
+    if(trab>600&&segNoturno(r.st,t1)>0)out.push({k:'noite',g:'GRAVE',tit:'Mais de 10 horas de trabalho em 24 h com trabalho noturno',ini:r.st,fim:t1,
+      det:'Horas de trabalho '+hm(trab)+' (10:00)',lb:'DL 237/2007, art. 6.º/5 · Diretiva 2002/15/CE, art. 7.º',
+      info:'Se houver trabalho (condução ou outros trabalhos) entre as 0h e as 5h, o trabalho não pode passar de 10 h no período de 24 h a contar do início do turno.'});}
+  return out;
+}
+function infracoes(){
+  const L_=[...infNovas()];const add=o=>L_.push(o);
+  const dia0=iso=>Date.parse(iso+'T00:00:00Z')/60000;
+  for(const r of ROWS)if(r.cond>600)add({k:'cond',g:'MUITO_GRAVE',tit:'Condução diária superior a 10 horas',ini:r.st,fim:r.en,det:'Condução '+hm(r.cond)+' (10:00)',lb:'Reg. (CE) 561/2006, art. 6.º/1',info:'A condução diária não pode passar de 9 h, ou de 10 h no máximo duas vezes por semana.'});
+  for(const w of WEEKS){
+    if(w.ext10>2)add({k:'ext',g:'GRAVE',tit:'Mais de 2 extensões da condução diária a 10 h na semana',ini:dia0(w.k),fim:dia0(w.kEnd)+1440,dias:1,det:w.ext10+' dias com condução acima de 9 h (2)',lb:'Reg. (CE) 561/2006, art. 6.º/1',info:'A condução diária pode chegar às 10 h só duas vezes por semana.'});
+    if(w.cond>56*60)add({k:'sem',g:'MUITO_GRAVE',tit:'Condução semanal superior a 56 horas',ini:dia0(w.k),fim:dia0(w.kEnd)+1440,dias:1,det:'Condução '+hm(w.cond)+' (56:00)',lb:'Reg. (CE) 561/2006, art. 6.º/2',info:'A condução semanal não pode passar de 56 h.'});
+    if(w.trab>60*60)add({k:'trab',g:'MUITO_GRAVE',tit:'Tempo de trabalho semanal superior a 60 horas',ini:dia0(w.k),fim:dia0(w.kEnd)+1440,dias:1,det:'Trabalho '+hm(w.trab)+' (60:00)',lb:'DL 84/2026, art. 21.º',info:'O tempo de trabalho semanal não pode passar de 60 h.'});
+    if(w.m4>48*60)add({k:'m4',g:'MUITO_GRAVE',tit:'Média de trabalho de 4 meses superior a 48 horas',ini:dia0(w.k),fim:dia0(w.kEnd)+1440,dias:1,det:'Média '+hm(w.m4)+' (48:00)',lb:'DL 84/2026, art. 21.º',info:'A média semanal de trabalho em 4 meses não pode passar de 48 h.'});
+  }
+  for(const p of BIPER)if(p.cond>90*60)add({k:'bis',g:'MUITO_GRAVE',tit:'Condução em duas semanas consecutivas superior a 90 horas',ini:dia0(p.iniIso),fim:dia0(p.fimIso)+1440,dias:1,det:'Condução '+hm(p.cond)+' (90:00)',lb:'Reg. (CE) 561/2006, art. 6.º/3',info:'Em duas semanas seguidas a condução não pode passar de 90 h.'});
+  for(const c of condContinua())add({k:'cont',g:'GRAVE',tit:'Condução contínua superior a 4h30 sem pausa',ini:c.t,fim:null,det:'Condução '+hm(c.dur)+' (4:30)',lb:'Reg. (CE) 561/2006, art. 7.º',info:'Depois de 4h30 de condução é obrigatória uma pausa de 45 min (ou 15 min + 30 min, por esta ordem).'});
+  for(const r of RESTS){
+    if(r.status==='INSUFICIENTE'||(r.weekly&&r.excede24)){
+      const frac=r.pausaMax>=180,tarde=r.dentro<r.dur;
+      add({k:'rep',g:r.amp>15*60||r.weekly?'MUITO_GRAVE':(r.dur<7*60?'MAXIMA':'MUITO_GRAVE'),
+        tit:frac?'Período de repouso diário descontínuo insuficiente (menos de 3+9 h)':'Período de repouso diário insuficiente (menos de 9 h)',
+        ini:r.fim,fim:r.ini,det:tarde?'Período de descanso iniciado muito tarde '+hm(r.dentro)+'/'+hm(r.dur)+' (9:00)':'Descanso de '+hm(r.dur)+' (9:00)',
+        lb:frac?'Reg. (CE) 561/2006, art. 4.º g) e 8.º/2':'Reg. (CE) 561/2006, art. 8.º/2',
+        info:frac?'Com uma pausa de pelo menos 3 h no turno, o repouso pode ser dividido em 3 h + 9 h, mas as 9 h têm de caber dentro das 24 h a contar do início do turno.':'Dentro das 24 h a contar do início do turno tem de caber um repouso de pelo menos 9 h (reduzido) ou 11 h (normal).'});}
+    if(r.max3==='EXCEDIDO')add({k:'red',g:'MUITO_GRAVE',tit:'Mais de 3 repousos diários reduzidos entre repousos semanais',ini:r.fim,fim:r.ini,det:r.red+'.º repouso reduzido (3)',lb:'Reg. (CE) 561/2006, art. 8.º/4',info:'Entre dois repousos semanais só podem existir 3 repousos diários reduzidos.'});
+    if(r.status==='SEMANAL REDUZIDO'&&!r.compOk)add({k:'comp',g:'GRAVE',tit:'Compensação de repouso semanal reduzido em falta',ini:r.fim,fim:r.ini,det:r.comp||('Semanal de '+hm(r.dur)),lb:'Reg. (CE) 561/2006, art. 8.º/6',info:'A diferença de um repouso semanal reduzido tem de ser compensada de uma só vez até ao fim da terceira semana seguinte.'});
+  }
+  const wk=RESTS.filter(r=>r.weekly);
+  for(let k=1;k<wk.length;k++){const gap=wk[k].fim-wk[k-1].ini;
+    if(gap>144*60)add({k:'144',g:'MUITO_GRAVE',tit:'Repouso semanal iniciado tarde (mais de 6 períodos de 24 h)',ini:wk[k-1].ini,fim:wk[k].fim,det:'Intervalo '+hm(gap)+' (144:00)',lb:'Reg. (CE) 561/2006, art. 8.º/6',info:'O repouso semanal tem de começar o mais tardar 6 períodos de 24 h depois do fim do anterior.'});}
+  if(DL){const d=Math.floor(Date.now()/86400000-DL/86400);
+    if(d>28)add({k:'dl',g:'GRAVE',tit:'Descarga do cartão fora do prazo',ini:DL/60,fim:null,det:'Última descarga há '+d+' dias (28)',lb:'Reg. (UE) 165/2014, art. 33.º',info:'Os dados do cartão têm de ser descarregados pelo menos a cada 28 dias.'});}
+  return L_.sort((a,b)=>b.ini-a.ini);
+}
+const INF_TIPOS={manual:'Entrada manual',pais:'Símbolo do país',noite:'Trabalho noturno',rep:'Repouso diário',cond:'Condução diária',ext:'Extensões a 10 h',cont:'Condução contínua',sem:'Condução semanal',bis:'Bissemanal',trab:'Trabalho semanal',m4:'Média 4 meses',red:'Reduzidos',comp:'Compensação',144:'Semanal tarde',dl:'Descarga'};
+let INF={per:'56',tipo:''};
+const infQuando=m=>dPT(dISO(new Date(L(m)*60000)))+' '+clk(L(m));
+const infDia=m=>dPT(dISO(new Date(L(m)*60000)));
+function infSecao(ini){
+  const todas=infracoes();
+  const lim=INF.per==='56'?Date.parse(ini+'T00:00:00Z')/60000:INF.per==='365'?Date.now()/60000-365*1440:-Infinity;
+  const doPer=todas.filter(x=>(x.fim??x.ini)>=lim);
+  const cont={};doPer.forEach(x=>cont[x.k]=(cont[x.k]||0)+1);
+  const vis=doPer.filter(x=>!INF.tipo||x.k===INF.tipo);
+  const G={MAXIMA:'MÁXIMA',MUITO_GRAVE:'MUITO GRAVE',GRAVE:'GRAVE',LEVE:'LEVE'};
+  const per=x=>x.dias?infDia(x.ini)+' – '+infDia(x.fim-1):x.fim!=null?infQuando(x.ini)+' – '+infQuando(x.fim):infQuando(x.ini);
+  return `<h2>Infrações detetadas</h2>
+  ${ULTREG?`<div class="inf-val">Válido: ${infQuando(ULTREG)}</div>`:''}
+  <div class="row noprint" style="margin-top:8px">
+    <label class="note">Período <select id="infPer">${[['56','Janela de 56 dias'],['365','Últimos 12 meses'],['tudo','Todo o histórico']].map(([v,t])=>`<option value="${v}" ${INF.per===v?'selected':''}>${t}</option>`).join('')}</select></label>
+  </div>
+  ${doPer.length?`<div class="chips noprint"><button class="chip-f" data-inf="" aria-pressed="${!INF.tipo}">Todas · ${doPer.length}</button>${Object.keys(INF_TIPOS).filter(k=>cont[k]).map(k=>`<button class="chip-f" data-inf="${k}" aria-pressed="${INF.tipo===k}">${INF_TIPOS[k]} · ${cont[k]}</button>`).join('')}</div>`:''}
+  ${vis.length?`<div class="inf-l">${vis.map(x=>`<article class="inf ${x.g}">
+      <div class="inf-top"><span class="inf-g">${G[x.g]}</span><span class="inf-ic" aria-hidden="true">⚠</span></div>
+      <h3>${esc(x.tit)}</h3>
+      <div class="inf-k">Período</div><div class="inf-v">${per(x)}</div>
+      <div class="inf-k">Detalhes</div><div class="inf-v inf-d">${esc(x.det)}</div>
+      <details><summary>ⓘ ${esc(x.lb)}</summary><p>${esc(x.info||'')}</p></details>
+    </article>`).join('')}</div>`
+    :`<div class="empty">Sem infrações ${INF.per==='56'?'na janela de 56 dias':INF.per==='365'?'nos últimos 12 meses':'no histórico'}. 🟢</div>`}`;
+}
+function infBind(){
+  const p=$('#infPer');if(!p)return;
+  p.onchange=e=>{INF.per=e.target.value;INF.tipo='';render()};
+  document.querySelectorAll('[data-inf]').forEach(b=>b.onclick=()=>{INF.tipo=b.dataset.inf;render()});
+}
 function fisc(){
   const hoje=dISO(new Date());
   const d0=new Date();d0.setUTCDate(d0.getUTCDate()-56);
@@ -2476,6 +2597,7 @@ function fisc(){
   return `${(idLinha.trim()||P.empresa)?`<div class="card"><b>${esc(idLinha.trim()||'—')}</b><div class="note">${[P.empresa,P.matricula,P.base].filter(Boolean).map(esc).join(' · ')||''}</div></div>`:''}
   <div class="card"><span class="sem ${worst}"></span><b>${worst==='g'?'Verde — em conformidade na janela de controlo':worst==='y'?'Amarelo — avisos na janela de 56 dias':'Vermelho — infrações graves na janela de 56 dias'}</b>
   <div class="note" style="margin-top:4px">Janela de fiscalização: ${dPT(ini)} → ${dPT(hoje)} (dia atual + 56 anteriores) · Semana atual: ${hm(cw.trab)} de trabalho, margem ${hm(cw.margem)}.${BIPER.length?' · Bissemanal em curso desde '+dPT(BIPER[BIPER.length-1].iniIso)+': '+hm(BIPER[BIPER.length-1].cond)+' de condução (margem '+hm(BIPER[BIPER.length-1].margem)+').':''}${rowsW.some(r=>r.man)?' · '+rowsW.filter(r=>r.man).length+' dia(s) da janela inseridos à mão (discos) — leva os registos em papel contigo.':''}</div></div>
+  ${infSecao(ini)}
   <h2>Checklist de inspeção (10 pontos)</h2>
   <div class="tw"><table>${chk.map(c=>`<tr><td>${c[1]?'✅':'❌'}</td><td style="white-space:normal">${c[0]}</td><td class="note">${c[2]}</td></tr>`).join('')}</table></div>
   ${geral.map(a=>`<div class="alert ${a.g}"><span class="g">${a.g.replace('_',' ')}</span> · ${esc(a.txt)}<div class="lb">${esc(a.lb)}</div></div>`).join('')}
@@ -2940,7 +3062,7 @@ function download(name,blob){
 if(AND&&AND.imprimir&&typeof window!=='undefined')window.print=()=>{try{AND.imprimir()}catch(e){}};
 function bind(){
   fotosBind();
-  feriasBind();
+  feriasBind();infBind();
   document.querySelectorAll('#fMes,#fSem').forEach(el=>el.onchange=e=>{if(e.target.id==='fMes'){fMes=e.target.value;fSem=''}else{fSem=e.target.value;fMes=''}render()});
   if($('#fLimpa'))$('#fLimpa').onclick=()=>{fMes='';fSem='';render()};
   document.querySelectorAll('.eEsp').forEach(el=>el.onchange=e=>{S.espera[e.target.dataset.d]=parseHM(e.target.value);save();rebuild()});
@@ -2982,7 +3104,7 @@ function bind(){
     const amp=parseHM($('#hAmp').value), ni=$('#hNi').value, nf=$('#hNf').value, ok=/^\d{2}:\d{2}$/;
     if(!amp||amp>24*60){alert('Amplitude inválida — escreve em h:mm, por exemplo 13:00.');return}
     if(!ok.test(ni)||!ok.test(nf)||ni===nf){alert('Indica o início e o fim do trabalho noturno (horas diferentes).');return}
-    const c=C();c.ampMax=amp;c.noiteIni=ni;c.noiteFim=nf;c.noiteAviso=$('#hAviso').checked;S.contrato=c;save();nvEstado('Horário guardado.','ok');render();
+    const c=C();c.ampMax=amp;c.noiteIni=ni;c.noiteFim=nf;S.contrato=c;save();nvEstado('Horário guardado.','ok');render();
   };
   const hR=$('#hRepor');if(hR)hR.onclick=()=>{const c=C();c.ampMax=13*60;c.noiteIni='22:00';c.noiteFim='07:00';S.contrato=c;save();render()};
   // --- conta e perfil ---
