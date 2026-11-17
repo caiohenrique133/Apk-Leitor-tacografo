@@ -374,7 +374,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   <button class="conta-btn" id="contaBtn" aria-haspopup="dialog"><span class="conta-av" id="contaAv">?</span><span class="conta-nm" id="contaNm">Conta</span><span aria-hidden="true">▾</span></button>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v4.2 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v4.3 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1344,6 +1344,25 @@ function condContinua(){ // art. 7.º: pausa de 45 min ou dividida em ≥15 + �
   }
   return out;
 }
+/* art. 8.º/6: em cada duas semanas seguidas (seg–dom) — pelo menos 2 descansos semanais, 1 deles regular (≥ 45h).
+   Um descanso que passa de uma semana para a outra conta para o par em que cai. */
+function paresSemanais(){
+  const out=[];if(!ROWS.length)return out;
+  const W=RESTS.filter(r=>r.weekly),SEM=10080;
+  const seg=m=>{const d=new Date(L(m)*60000);d.setUTCHours(0,0,0,0);d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));return d.getTime()/60000};
+  const k0=seg(ROWS[0].st)+SEM,kFim=seg(ULTREG||ROWS[ROWS.length-1].en);
+  for(let a=k0;a+2*SEM<=kFim;a+=SEM){   // só pares de semanas já terminadas
+    const b=a+2*SEM;
+    const rs=W.filter(r=>L(r.fim)<b&&L(r.ini)>a);
+    if(rs.some(r=>Math.min(L(r.ini),b)-Math.max(L(r.fim),a)>=7*1440))continue; // férias/paragem longa
+    const reg=rs.filter(r=>r.dur>=45*60).length;
+    if(rs.length>=2&&reg>=1)continue;
+    const per=dPT(dISO(new Date(a*60000)))+' – '+dPT(dISO(new Date((b-1440)*60000)));
+    out.push({ini:a,fim:b,n:rs.length,reg,per,
+      txt:'Semanas '+per+': '+(rs.length===0?'nenhum descanso semanal':rs.length+' descanso'+(rs.length>1?'s':'')+' semana'+(rs.length>1?'is':'l')+(reg?'':' e nenhum regular (≥ 45h)'))+' — em duas semanas seguidas são precisos 2, pelo menos 1 regular'});
+  }
+  return out;
+}
 function buildAlerts(){
   const A=[];const add=(g,iso,scope,txt,lb)=>A.push({g,iso,scope,txt,lb});
   for(const r of ROWS){
@@ -1375,7 +1394,6 @@ function buildAlerts(){
     const lbl='Bissemanal '+dPT(p.iniIso)+'→'+dPT(p.fimIso)+(p.aberto?' (em curso)':'');
     if(p.cond>90*60)add('MUITO_GRAVE',k,'semana',lbl+': condução '+hm(p.cond)+' (> 90h)','Reg. 561/2006, art. 6.º/3');
     else if(p.cond>=0.8*90*60)add('LEVE',k,'semana',lbl+': condução '+hm(p.cond)+' — ≥ 80% do limite de 90h','Aviso preventivo');
-    if(p.span>14)add(p.aberto?'LEVE':'GRAVE',k,'semana',lbl+': '+p.span+' dias sem descanso ≥ '+hm(LIMB)+' — o período bissemanal não fechou em 2 semanas','Reg. 561/2006, art. 8.º/6');
   }
   for(const r of RESTS){
     if(r.status==='INSUFICIENTE'){
@@ -1387,6 +1405,7 @@ function buildAlerts(){
     if(r.max3==='EXCEDIDO')add('MUITO_GRAVE',r.iso,'dia',r.red+'.º descanso reduzido desde o último semanal (máx. 3)','Reg. 561/2006, art. 8.º/4');
     if(r.status==='SEMANAL REDUZIDO'&&!r.compOk)add('GRAVE',r.iso,'dia','Semanal reduzido — '+r.comp,'Reg. 561/2006, art. 8.º/6');
   }
+  for(const x of paresSemanais())add('GRAVE',dISO(new Date(x.ini*60000)),'semana',x.txt,'Reg. 561/2006, art. 8.º/6');
   const wk=RESTS.filter(r=>r.weekly);
   for(let k=1;k<wk.length;k++){const gap=wk[k].fim-wk[k-1].ini;
     if(gap>144*60)add('MUITO_GRAVE',wk[k].iso,'dia','Novo descanso semanal iniciado '+hm(gap)+' após o fim do anterior (> 144h / 6×24h)','Reg. 561/2006, art. 8.º/6');}
@@ -2525,6 +2544,9 @@ function infracoes(){
     if(r.max3==='EXCEDIDO')add({k:'red',g:'MUITO_GRAVE',tit:'Mais de 3 repousos diários reduzidos entre repousos semanais',ini:r.fim,fim:r.ini,det:r.red+'.º repouso reduzido (3)',lb:'Reg. (CE) 561/2006, art. 8.º/4',info:'Entre dois repousos semanais só podem existir 3 repousos diários reduzidos.'});
     if(r.status==='SEMANAL REDUZIDO'&&!r.compOk)add({k:'comp',g:'GRAVE',tit:'Compensação de repouso semanal reduzido em falta',ini:r.fim,fim:r.ini,det:r.comp||('Semanal de '+hm(r.dur)),lb:'Reg. (CE) 561/2006, art. 8.º/6',info:'A diferença de um repouso semanal reduzido tem de ser compensada de uma só vez até ao fim da terceira semana seguinte.'});
   }
+  for(const x of paresSemanais())add({k:'2sem',g:'GRAVE',tit:'Repousos semanais insuficientes em duas semanas consecutivas',ini:x.ini,fim:x.fim,dias:1,
+    det:(x.n?x.n+' repouso'+(x.n>1?'s':'')+' semana'+(x.n>1?'is':'l'):'Nenhum repouso semanal')+(x.n&&!x.reg?', nenhum regular':'')+' (2, pelo menos 1 regular)',lb:'Reg. (CE) 561/2006, art. 8.º/6',
+    info:'Em cada duas semanas seguidas (segunda a domingo) tem de haver pelo menos dois repousos semanais: dois regulares (≥ 45 h) ou um regular e um reduzido (≥ 24 h).'});
   const wk=RESTS.filter(r=>r.weekly);
   for(let k=1;k<wk.length;k++){const gap=wk[k].fim-wk[k-1].ini;
     if(gap>144*60)add({k:'144',g:'MUITO_GRAVE',tit:'Repouso semanal iniciado tarde (mais de 6 períodos de 24 h)',ini:wk[k-1].ini,fim:wk[k].fim,det:'Intervalo '+hm(gap)+' (144:00)',lb:'Reg. (CE) 561/2006, art. 8.º/6',info:'O repouso semanal tem de começar o mais tardar 6 períodos de 24 h depois do fim do anterior.'});}
@@ -2532,7 +2554,7 @@ function infracoes(){
     if(d>28)add({k:'dl',g:'GRAVE',tit:'Descarga do cartão fora do prazo',ini:DL/60,fim:null,det:'Última descarga há '+d+' dias (28)',lb:'Reg. (UE) 165/2014, art. 33.º',info:'Os dados do cartão têm de ser descarregados pelo menos a cada 28 dias.'});}
   return L_.sort((a,b)=>b.ini-a.ini);
 }
-const INF_TIPOS={manual:'Entrada manual',pais:'Símbolo do país',noite:'Trabalho noturno',rep:'Repouso diário',cond:'Condução diária',ext:'Extensões a 10 h',cont:'Condução contínua',sem:'Condução semanal',bis:'Bissemanal',trab:'Trabalho semanal',m4:'Média 4 meses',red:'Reduzidos',comp:'Compensação',144:'Semanal tarde',dl:'Descarga'};
+const INF_TIPOS={manual:'Entrada manual',pais:'Símbolo do país',noite:'Trabalho noturno',rep:'Repouso diário',cond:'Condução diária',ext:'Extensões a 10 h',cont:'Condução contínua',sem:'Condução semanal',bis:'Bissemanal',trab:'Trabalho semanal',m4:'Média 4 meses',red:'Reduzidos',comp:'Compensação','2sem':'Repouso semanal',144:'Semanal tarde',dl:'Descarga'};
 let INF={per:'56',tipo:''};
 const infQuando=m=>dPT(dISO(new Date(L(m)*60000)))+' '+clk(L(m));
 const infDia=m=>dPT(dISO(new Date(L(m)*60000)));
@@ -2587,7 +2609,7 @@ function fisc(){
     ['Pausas de 45 min a cada 4h30 de condução',!condContinua().some(c=>c.t>=iniMin),'561/2006, art. 7.º'],
     ['Descanso diário completo dentro das 24h',!restsW.some(r=>r.excede24),'561/2006, art. 8.º/2'],
     ['Máx. 3 descansos diários reduzidos entre semanais',!restsW.some(r=>r.max3==='EXCEDIDO'),'561/2006, art. 8.º/4'],
-    ['Descansos semanais e compensações em dia',!restsW.some(r=>r.status==='SEMANAL REDUZIDO'&&!r.compOk),'561/2006, art. 8.º/6'],
+    ['Descansos semanais e compensações em dia',!restsW.some(r=>r.status==='SEMANAL REDUZIDO'&&!r.compOk)&&!paresSemanais().some(x=>x.fim>iniMin),'561/2006, art. 8.º/6'],
     ['Condução ≤ 90h em cada bissemanal (entre descansos ≥ '+hm(S.bisLim||45*60)+')',!BIPER.some(p=>p.fimIso>=ini&&p.cond>90*60),'561/2006, art. 6.º/3'],
     ['Trabalho semanal ≤ 60h e média 4 meses ≤ 48h',!weeksW.some(w=>w.trab>60*60||w.m4>48*60),'DL 84/2026, art. 21.º']];
   const hist=[...CTRLS.map(c=>({t:c.t/60,txt:'Controlo lido do cartão — matrícula '+(c.reg||'—')})),...(S.ctrlHist||[]).map(h=>({t:Date.parse(h.d)/60000,txt:h.txt+' (manual)'}))].sort((a,b)=>b.t-a.t);
