@@ -374,7 +374,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   <button class="conta-btn" id="contaBtn" aria-haspopup="dialog"><span class="conta-av" id="contaAv">?</span><span class="conta-nm" id="contaNm">Conta</span><span aria-hidden="true">▾</span></button>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v4.5 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v4.6 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1140,7 +1140,10 @@ function rebuild(){
     for(const d of f.days){
       const key=Math.floor(d.ts/86400);
       distMap[key]=Math.max(distMap[key]||0,d.dist);
-      for(const c of d.ch)evMap.set(c.t+'_'+c.a+'_'+c.ins,c);
+      // a mesma mudança pode vir em várias descargas: com o cartão fora, uma descarga feita antes de o voltar
+      // a inserir tem a atividade «desconhecida»; a descarga seguinte já traz a entrada manual — essa prevalece
+      for(const c of d.ch){const k=c.t+'_'+c.ins,o=evMap.get(k);
+        if(!o||(!c.ins&&o.kn===false&&c.kn===true))evMap.set(k,c)}
     }
   }
   const ev=[...evMap.values()].sort((a,b)=>a.t-b.t);
@@ -2514,12 +2517,27 @@ function alertas(){
 
 /* ---- Fiscalização ---- */
 /* ============ INFRAÇÕES (lista com período e detalhes, como nos leitores de cartão) ============ */
+// fim do descanso que antecede o turno: a inserção do cartão, se o descanso acabou com o cartão fora
+function fimDescanso(r){let t=r.st;
+  for(let i=SEGS.length-1;i>=0;i--){const g=SEGS[i];if(g.t0>=r.st)continue;if(g.t1<t||g.a!==0)break;
+    if(!g.ins)return g.t1;t=g.t0}
+  return r.st}
+// tempo de trabalho numa janela: condução + outros trabalhos + interrupções de menos de 15 min
+// (uma paragem curta não é pausa nem descanso, por isso conta como trabalho)
+function trabJanela(t0,t1){let m=0,rep=0;const fecha=()=>{if(rep>0&&rep<15)m+=rep;rep=0};
+  for(const g of SEGS){if(g.t1<=t0)continue;if(g.t0>=t1)break;const d=Math.min(g.t1,t1)-Math.max(g.t0,t0);
+    if(g.a===0)rep+=d;else{fecha();if(g.a===2||g.a===3)m+=d}}
+  return m}
 const segSoma=(t0,t1,acts)=>{let m=0;for(const s of SEGS){if(s.t1<=t0)continue;if(s.t0>=t1)break;if(acts.includes(s.a))m+=Math.min(s.t1,t1)-Math.max(s.t0,t0)}return m};
-const NOITE_LEGAL=[0,300]; // 00:00–05:00 (DL 237/2007, art. 6.º/5)
-function segNoturno(t0,t1){ // minutos de trabalho (condução + outros trabalhos) entre as 0h e as 5h
+const NOITE_LEGAL=[0,300]; // 00:00–05:00 hora de Portugal continental (DL 237/2007, art. 6.º/5)
+// hora legal de Portugal: UTC no inverno, UTC+1 entre o último domingo de março e o último domingo de outubro (01:00 UTC)
+function ptOff(m){const y=new Date(m*60000).getUTCFullYear();
+  const ult=mes=>{const d=new Date(Date.UTC(y,mes+1,0));d.setUTCDate(d.getUTCDate()-d.getUTCDay());return d.getTime()/60000+60};
+  return m>=ult(2)&&m<ult(9)?60:0}
+function segNoturno(t0,t1){ // minutos de trabalho (condução + outros trabalhos) entre as 0h e as 5h (hora local)
   const [ni,nf]=NOITE_LEGAL;let tot=0;
   for(const s of SEGS){if(s.t1<=t0)continue;if(s.t0>=t1)break;if(s.a!==2&&s.a!==3)continue;
-    const a0=L(Math.max(s.t0,t0)),a1=L(Math.min(s.t1,t1));
+    const a0=Math.max(s.t0,t0)+ptOff(s.t0),a1=Math.min(s.t1,t1)+ptOff(s.t0);
     for(let d=-1;d<=1;d++){const base=Math.floor(a0/1440)*1440+d*1440;let a=base+ni,b=base+nf;if(b<=a)b+=1440;tot+=Math.max(0,Math.min(a1,b)-Math.max(a0,a))}}
   return tot;
 }
@@ -2538,12 +2556,12 @@ function infNovas(){ // regras que só esta lista acrescenta
       if(!tem(ant,r.en,0))out.push({...inf,ini:r.st,fim:null,det:'Falta o país no início do período de trabalho diário.'});
       if(seg!=null&&!tem(r.st,seg,1))out.push({...inf,ini:r.en,fim:null,det:'Falta o país no fim do período de trabalho diário.'});
     })}
-  // trabalho noturno: máximo 10h de trabalho em cada 24h
-  for(const r of ROWS){if(r.est)continue;const t1=r.st+1440;
-    const trab=segSoma(r.st,t1,[2,3]);
-    if(trab>600&&segNoturno(r.st,t1)>0)out.push({k:'noite',g:'GRAVE',tit:'Mais de 10 horas de trabalho em 24 h com trabalho noturno',ini:r.st,fim:t1,
+  // trabalho noturno: máximo 10h de trabalho nas 24h a contar do fim do descanso
+  for(const r of ROWS){if(r.est)continue;const t0=fimDescanso(r),t1=t0+1440;
+    const trab=trabJanela(t0,t1);
+    if(trab>600&&segNoturno(t0,t1)>0)out.push({k:'noite',g:'GRAVE',tit:'Mais de 10 horas de trabalho em 24 h com trabalho noturno',ini:t0,fim:t1,
       det:'Horas de trabalho '+hm(trab)+' (10:00)',lb:'DL 237/2007, art. 6.º/5 · Diretiva 2002/15/CE, art. 7.º',
-      info:'Se houver trabalho (condução ou outros trabalhos) entre as 0h e as 5h, o trabalho não pode passar de 10 h no período de 24 h a contar do início do turno.'});}
+      info:'Se houver trabalho (condução ou outros trabalhos) entre as 0h e as 5h (hora de Portugal), o trabalho não pode passar de 10 h nas 24 h a contar do fim do descanso. Interrupções de menos de 15 min contam como trabalho.'});}
   return out;
 }
 function infracoes(){
