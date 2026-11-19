@@ -374,7 +374,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   <button class="conta-btn" id="contaBtn" aria-haspopup="dialog"><span class="conta-av" id="contaAv">?</span><span class="conta-nm" id="contaNm">Conta</span><span aria-hidden="true">▾</span></button>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v4.4 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v4.5 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1254,16 +1254,19 @@ function rebuild(){
     if(r.weekly)lastWkEnd=r.ini; // fim do descanso semanal = início do turno seguinte
   }
   // compensação art. 8.º/6 (alocação do excedente dos descansos seguintes, mais antigo primeiro)
-  const surplus=RESTS.map(r=>r.dur>=24*60?r.dur-24*60:(r.dur>=11*60?r.dur-11*60:0)).slice();
+  // excedente que pode compensar: acima de 45h num semanal regular, acima de 11h num descanso diário (um semanal reduzido não tem excedente)
+  const surplus=RESTS.map(r=>r.dur>=45*60?r.dur-45*60:(r.dur>=24*60?0:(r.dur>=11*60?r.dur-11*60:0))).slice();
   for(let a=0;a<RESTS.length;a++){
     const r=RESTS[a];
     if(r.status!=='SEMANAL REDUZIDO')continue;
-    const dl=r.ini+21*24*60; let need=r.falta;
+    // prazo: fim da 3.ª semana a seguir à semana do descanso reduzido (domingo 24:00 UTC)
+    const d0=Math.floor(L(r.fim)/1440),dow0=(new Date(d0*86400000).getUTCDay()+6)%7;
+    const dl=(d0-dow0+28)*1440; let need=r.falta;
     for(let b=a+1;b<RESTS.length&&need>0;b++){
       if(RESTS[b].ini>dl)break;
       const use=Math.min(need,surplus[b]);need-=use;surplus[b]-=use;
     }
-    const dld=new Date(L(dl)*60000);
+    const dld=new Date((dl-1440)*60000);
     r.comp=need<=0?'COMPENSADO':('COMPENSAR '+hm(r.falta)+' ATÉ '+dPT(dISO(dld)));
     r.compOk=need<=0;
   }
@@ -1276,7 +1279,7 @@ function rebuild(){
      if(!p){p={ini:r.st,iniIso:r.iso,rows:[],cond:0,trab:0,jorn:0,km:0,aberto:true,fecho:null};BIPER.push(p)}
      p.rows.push(r);r.bi=BIPER.length-1;
      p.fim=r.en;p.fimIso=r.iso;
-     p.cond+=r.cond;p.trab+=r.trabalho;p.jorn+=r.jornada;p.km+=r.km;
+     p.cond+=r.cond;p.trab+=r.cond+r.ot;p.jorn+=r.jornada;p.km+=r.km;
      r.biC=p.cond;r.biT=p.trab;
      const rest=RESTS[k];
      if(rest&&rest.dur>=LIMB){p.fecho=rest;p.aberto=false;p=null}
@@ -1292,13 +1295,21 @@ function rebuild(){
     r.wk=k;
     (wk[k]=wk[k]||{k,rows:[]}).rows.push(r);
   }
+  // horas de condução/trabalho por semana fixa (seg 00:00 – dom 24:00, UTC): um turno de domingo para segunda
+  // conta as horas de domingo numa semana e as de segunda na seguinte (art. 4.º i) do Reg. 561/2006)
+  const wkSeg={};
+  for(const g of SEGS){if(!g.a)continue;
+    for(let t=g.t0;t<g.t1;){const lm=L(t),dia=Math.floor(lm/1440),dow=(new Date(dia*86400000).getUTCDay()+6)%7,seg0=(dia-dow)*1440,ate=Math.min(g.t1,t+(seg0+7*1440-lm));
+      const k=dISO(new Date(seg0*60000));const o=wkSeg[k]=wkSeg[k]||[0,0,0,0];o[g.a]+=ate-t;t=ate}}
+  for(const k of Object.keys(wkSeg))if(!wk[k])wk[k]={k,rows:[]};
   WEEKS=Object.values(wk).sort((a,b)=>a.k<b.k?-1:1);
   const AUSM=ausMapa(),TRAB=new Set(ROWS.map(r=>r.iso));
   WEEKS.forEach((w,ix)=>{
     const sum=f=>w.rows.reduce((s,r)=>s+f(r),0);
-    w.dias=w.rows.length;w.cond=sum(r=>r.cond);w.ot=sum(r=>r.ot);w.disp=sum(r=>r.disp);
+    const ws=wkSeg[w.k]||[0,0,0,0];
+    w.dias=w.rows.length;w.cond=ws[3];w.ot=ws[2];w.disp=ws[1];
     w.esp=sum(r=>r.esp);w.pausa=sum(r=>r.pausa);w.jorn=sum(r=>r.jornada);w.km=sum(r=>r.km);
-    w.trab=w.cond+w.ot+w.disp;
+    w.trab=w.cond+w.ot;   // a disponibilidade não é tempo de trabalho (DL 84/2026 / Diretiva 2002/15/CE)
     const e=new Date(w.k+'T00:00:00Z');e.setUTCDate(e.getUTCDate()+6);w.kEnd=dISO(e);
     // média 4 meses (17 semanas a terminar nesta)
     // semanas com férias, licenças ou baixas contam (7 − dias ausentes) ÷ 7 de semana
@@ -1306,9 +1317,13 @@ function rebuild(){
     let s=0,n=0;for(let p=Math.max(0,ix-16);p<=ix;p++){s+=WEEKS[p].trab;n+=(7-(WEEKS[p].aus??ausNaSemana(WEEKS[p].k,AUSM,TRAB)))/7}
     w.m4=n>0?s/n:0;
     // bissemanal = acumulado do período em curso (reinicia após descanso ≥ 45h)
-    const lr=w.rows[w.rows.length-1];
+    const lr=w.rows[w.rows.length-1]||(ix?{bi:WEEKS[ix-1].biIdx,biT:WEEKS[ix-1].bis,biC:WEEKS[ix-1].bisC}:{bi:0,biT:0,biC:0});
     w.biIdx=lr.bi;w.bis=lr.biT;w.bisC=lr.biC;
-    w.biNovos=w.rows.filter((r,i)=>i===0?false:r.bi!==w.rows[i-1].bi).length+(ix&&WEEKS[ix-1].rows[WEEKS[ix-1].rows.length-1].bi!==w.rows[0].bi?1:0);
+    const ult=ix&&WEEKS[ix-1].rows.length?WEEKS[ix-1].rows[WEEKS[ix-1].rows.length-1]:null;
+    w.biNovos=w.rows.filter((r,i)=>i===0?false:r.bi!==w.rows[i-1].bi).length+(ult&&w.rows[0]&&ult.bi!==w.rows[0].bi?1:0);
+    // 90h em cada duas semanas fixas consecutivas (esta + a anterior)
+    const ant=ix?WEEKS[ix-1]:null,antOk=ant&&(Date.parse(w.k)-Date.parse(ant.k))===7*86400000;
+    w.cond2=w.cond+(antOk?ant.cond:0);w.k2=antOk?ant.k:w.k;
     w.margem=60*60-w.trab;
     w.estado=w.trab>60*60?'>60h':(w.trab>=55*60?'ALERTA 55–60h':'OK');
     w.estM4=w.m4>48*60?'MÉDIA > 48h':'OK';
@@ -1399,11 +1414,10 @@ function buildAlerts(){
     if(w.ext10>2)add('GRAVE',w.k,'semana',w.ext10+' dias com condução > 9h (máx. 2 extensões)','Reg. 561/2006, art. 6.º/1');
   }
   const LIMB=S.bisLim||45*60;
-  for(const p of BIPER){
-    const k=p.rows[p.rows.length-1].wk;
-    const lbl='Bissemanal '+dPT(p.iniIso)+'→'+dPT(p.fimIso)+(p.aberto?' (em curso)':'');
-    if(p.cond>90*60)add('MUITO_GRAVE',k,'semana',lbl+': condução '+hm(p.cond)+' (> 90h)','Reg. 561/2006, art. 6.º/3');
-    else if(p.cond>=0.8*90*60)add('LEVE',k,'semana',lbl+': condução '+hm(p.cond)+' — ≥ 80% do limite de 90h','Aviso preventivo');
+  for(const w of WEEKS){
+    const lbl='Semanas '+dPT(w.k2)+'–'+dPT(w.kEnd);
+    if(w.cond2>90*60)add('MUITO_GRAVE',w.k,'semana',lbl+': condução '+hm(w.cond2)+' (> 90h em duas semanas seguidas)','Reg. 561/2006, art. 6.º/3');
+    else if(w.cond2>=0.8*90*60)add('LEVE',w.k,'semana',lbl+': condução '+hm(w.cond2)+' — ≥ 80% do limite de 90h','Aviso preventivo');
   }
   for(const r of RESTS){
     if(r.status==='INSUFICIENTE'){
@@ -2230,8 +2244,9 @@ function lei84(){
   <div class="kgrid">
     ${kpi('Semana atual '+dPT(cur.k).slice(0,5)+'–'+dPT(cur.kEnd).slice(0,5),hm(cur.trab),cur.trab>60*60?'bad':cur.trab>=48*60?'warn':'ok')}
     ${kpi('Margem até 60h',hm(cur.margem),cur.margem<5*60?'bad':cur.margem<12*60?'warn':'ok')}
-    ${kpi('Bissemanal atual',pa?hm(pa.trab):'—','','desde '+(pa?dPT(pa.iniIso):'—')+' · Cond+OT+Disp')}
-    ${kpi('Condução na bissemanal',pa?hm(pa.cond):'—',pa&&pa.cond>90*60?'bad':pa&&pa.cond>=0.8*90*60?'warn':'ok','limite 90h')}
+    ${kpi('Bissemanal atual',pa?hm(pa.trab):'—','','desde '+(pa?dPT(pa.iniIso):'—')+' · Cond+OT')}
+    ${kpi('Condução 2 semanas (lei)',hm(cur.cond2),cur.cond2>90*60?'bad':cur.cond2>=0.8*90*60?'warn':'ok','semana anterior + atual · limite 90h')}
+    ${kpi('Condução na bissemanal',pa?hm(pa.cond):'—',pa&&pa.cond>90*60?'warn':'','entre descansos ≥ '+hm(LIMB))}
     ${kpi('Margem até 90h',pa?hm(pa.margem):'—',pa&&pa.margem<0?'bad':pa&&pa.margem<10*60?'warn':'ok')}
     ${kpi('Dias na bissemanal',pa?pa.dias+' / '+pa.span+' corridos':'—',pa&&pa.span>14?'warn':'')}
     ${kpi('Média 4 meses',hm(cur.m4),cur.m4>48*60?'bad':cur.m4>0.8*48*60?'warn':'ok','limite 48h')}
@@ -2541,7 +2556,7 @@ function infracoes(){
     if(w.trab>60*60)add({k:'trab',g:'MUITO_GRAVE',tit:'Tempo de trabalho semanal superior a 60 horas',ini:dia0(w.k),fim:dia0(w.kEnd)+1440,dias:1,det:'Trabalho '+hm(w.trab)+' (60:00)',lb:'DL 84/2026, art. 21.º',info:'O tempo de trabalho semanal não pode passar de 60 h.'});
     if(w.m4>48*60)add({k:'m4',g:'MUITO_GRAVE',tit:'Média de trabalho de 4 meses superior a 48 horas',ini:dia0(w.k),fim:dia0(w.kEnd)+1440,dias:1,det:'Média '+hm(w.m4)+' (48:00)',lb:'DL 84/2026, art. 21.º',info:'A média semanal de trabalho em 4 meses não pode passar de 48 h.'});
   }
-  for(const p of BIPER)if(p.cond>90*60)add({k:'bis',g:'MUITO_GRAVE',tit:'Condução em duas semanas consecutivas superior a 90 horas',ini:dia0(p.iniIso),fim:dia0(p.fimIso)+1440,dias:1,det:'Condução '+hm(p.cond)+' (90:00)',lb:'Reg. (CE) 561/2006, art. 6.º/3',info:'Em duas semanas seguidas a condução não pode passar de 90 h.'});
+  for(const w of WEEKS)if(w.cond2>90*60)add({k:'bis',g:'MUITO_GRAVE',tit:'Condução em duas semanas consecutivas superior a 90 horas',ini:dia0(w.k2),fim:dia0(w.kEnd)+1440,dias:1,det:'Condução '+hm(w.cond2)+' (90:00)',lb:'Reg. (CE) 561/2006, art. 6.º/3',info:'Em duas semanas seguidas a condução não pode passar de 90 h.'});
   for(const c of condContinua())add({k:'cont',g:'GRAVE',tit:'Condução contínua superior a 4h30 sem pausa',ini:c.t,fim:null,det:'Condução '+hm(c.dur)+' (4:30)',lb:'Reg. (CE) 561/2006, art. 7.º',info:'Depois de 4h30 de condução é obrigatória uma pausa de 45 min (ou 15 min + 30 min, por esta ordem).'});
   for(const r of RESTS){
     if(r.status==='INSUFICIENTE'||(r.weekly&&r.excede24)){
@@ -2620,7 +2635,7 @@ function fisc(){
     ['Descanso diário completo dentro das 24h',!restsW.some(r=>r.excede24),'561/2006, art. 8.º/2'],
     ['Máx. 3 descansos diários reduzidos entre semanais',!restsW.some(r=>r.max3==='EXCEDIDO'),'561/2006, art. 8.º/4'],
     ['Descansos semanais e compensações em dia',!restsW.some(r=>r.status==='SEMANAL REDUZIDO'&&!r.compOk)&&!paresSemanais().some(x=>x.fim>iniMin),'561/2006, art. 8.º/6'],
-    ['Condução ≤ 90h em cada bissemanal (entre descansos ≥ '+hm(S.bisLim||45*60)+')',!BIPER.some(p=>p.fimIso>=ini&&p.cond>90*60),'561/2006, art. 6.º/3'],
+    ['Condução ≤ 90h em cada duas semanas seguidas (seg–dom)',!weeksW.some(w=>w.cond2>90*60),'561/2006, art. 6.º/3'],
     ['Trabalho semanal ≤ 60h e média 4 meses ≤ 48h',!weeksW.some(w=>w.trab>60*60||w.m4>48*60),'DL 84/2026, art. 21.º']];
   const hist=[...CTRLS.map(c=>({t:c.t/60,txt:'Controlo lido do cartão — matrícula '+(c.reg||'—')})),...(S.ctrlHist||[]).map(h=>({t:Date.parse(h.d)/60000,txt:h.txt+' (manual)'}))].sort((a,b)=>b.t-a.t);
   const P=S.perfil||{};
@@ -2628,7 +2643,7 @@ function fisc(){
     :([P.nome,P.ap].filter(Boolean).join(' ')+(P.cartao?' · cartão '+P.cartao:''));
   return `${(idLinha.trim()||P.empresa)?`<div class="card"><b>${esc(idLinha.trim()||'—')}</b><div class="note">${[P.empresa,P.matricula,P.base].filter(Boolean).map(esc).join(' · ')||''}</div></div>`:''}
   <div class="card"><span class="sem ${worst}"></span><b>${worst==='g'?'Verde — em conformidade na janela de controlo':worst==='y'?'Amarelo — avisos na janela de 56 dias':'Vermelho — infrações graves na janela de 56 dias'}</b>
-  <div class="note" style="margin-top:4px">Janela de fiscalização: ${dPT(ini)} → ${dPT(hoje)} (dia atual + 56 anteriores) · Semana atual: ${hm(cw.trab)} de trabalho, margem ${hm(cw.margem)}.${BIPER.length?' · Bissemanal em curso desde '+dPT(BIPER[BIPER.length-1].iniIso)+': '+hm(BIPER[BIPER.length-1].cond)+' de condução (margem '+hm(BIPER[BIPER.length-1].margem)+').':''}${rowsW.some(r=>r.man)?' · '+rowsW.filter(r=>r.man).length+' dia(s) da janela inseridos à mão (discos) — leva os registos em papel contigo.':''}</div></div>
+  <div class="note" style="margin-top:4px">Janela de fiscalização: ${dPT(ini)} → ${dPT(hoje)} (dia atual + 56 anteriores) · Semana atual: ${hm(cw.trab)} de trabalho, margem ${hm(cw.margem)}. · Condução na semana anterior + atual: ${hm(cw.cond2)} (margem ${hm(90*60-cw.cond2)} até às 90h).${rowsW.some(r=>r.man)?' · '+rowsW.filter(r=>r.man).length+' dia(s) da janela inseridos à mão (discos) — leva os registos em papel contigo.':''}</div></div>
   ${infSecao(ini)}
   <h2>Checklist de inspeção (10 pontos)</h2>
   <div class="tw"><table>${chk.map(c=>`<tr><td>${c[1]?'✅':'❌'}</td><td style="white-space:normal">${c[0]}</td><td class="note">${c[2]}</td></tr>`).join('')}</table></div>
@@ -2686,7 +2701,7 @@ function rjPeriodo(R){return R.mes?'Mês de '+dPT(R.mes+'-01').slice(3):dPT(R.in
 function rjIdLinha(R){const I=rjIdent();return [I.nome&&'Condutor: '+I.nome,I.cartao&&'Cartão: '+I.cartao,I.empresa,I.matricula&&'Matrícula: '+I.matricula,'Período: '+rjPeriodo(R)].filter(Boolean)}
 const RJ_SUB='Soma toda a jornada (Início ao Fim) e os seus componentes: Condução + Outros Trabalhos + Disponibilidade + Espera Doc. + Pausa. Semana = segunda a domingo.';
 const RJ_NOTA='Nota: a coluna Acumulado soma a jornada total desde a primeira semana do relatório. Fonte de dados: registos do cartão de condutor e dias inseridos à mão (Condução, Outros Trabalhos, Disponibilidade, Espera Doc., Pausa e Jornada).';
-const DL_SUB='Limites do art. 21.º do DL 84/2026: máx. 60h de trabalho por semana e média de 48h num período de 4 meses (≈17 semanas). Tempo de trabalho = Condução + Outros Trabalhos + Disponibilidade. Semana = segunda a domingo. BISSEMANAL: a contagem reinicia sempre que existe um descanso igual ou superior ao limiar definido na app (por defeito 45h) — esse descanso fecha o período anterior e o novo começa no turno seguinte. As colunas bissemanais mostram o acumulado do período em curso até ao fim dessa semana. Limite de condução na bissemanal: 90h (Reg. 561/2006, art. 6.º/3).';
+const DL_SUB='Limites do art. 21.º do DL 84/2026: máx. 60h de trabalho por semana e média de 48h num período de 4 meses (≈17 semanas). Tempo de trabalho = Condução + Outros Trabalhos (a disponibilidade não conta). Semana = segunda 00:00 a domingo 24:00 (UTC). BISSEMANAL: a contagem reinicia sempre que existe um descanso igual ou superior ao limiar definido na app (por defeito 45h) — esse descanso fecha o período anterior e o novo começa no turno seguinte. As colunas bissemanais mostram o acumulado do período em curso até ao fim dessa semana. Limite de condução na bissemanal: 90h (Reg. 561/2006, art. 6.º/3).';
 const DL_NOTA='Nota: os limites de 60h e média de 48h (4 meses) vêm do artigo 21.º do DL 84/2026. Colunas bissemanais: condução acumulada no período bissemanal em curso — limite de 90h (Reg. 561/2006); a partir de 112h30 aplica-se o agravamento de 20% das coimas (art. 39.º, n.º 2 do DL 84/2026). Fonte de dados: folha DADOS.';
 const DS_SUB='Descanso calculado pela LÓGICA DAS 24 HORAS (Reg. 561/2006, art. 8.º/2): o período de 24h começa no início do turno e o descanso diário tem de estar COMPLETO dentro dessas 24 horas — jornada até 13h: DIÁRIO REGULAR · de 13h a 15h: DIÁRIO REDUZIDO (máx. 3 entre dois descansos semanais, art. 8.º/4) · acima de 15h: INFRAÇÃO. A coluna "Dentro das 24h" é a que decide. Fracionado (art. 4.º, al. g): 3h seguidas de pausa no turno + 9h a seguir valem como regular. Semanais: ≥24h REDUZIDO · ≥45h REGULAR; as horas em falta até 45h compensam-se até ao fim da 3.ª semana seguinte (art. 8.º/6).';
 const EX_SUB='Dias marcados como Extra nos Registos e dias trabalhados a sábado, domingo ou feriado. Valores e estado de pagamento lançados na aba Extras da app.';
@@ -2727,8 +2742,8 @@ function rjFolhas(R){
   const W=R.semDL, uw=W[W.length-1];
   const bisAt=uw?BIPER[uw.biIdx]:null;
   F.dl84={titulo:'CONTROLO DL 84/2026 — TEMPO DE TRABALHO SEMANAL',sub:DL_SUB,nota:DL_NOTA,
-    kpis:uw?[['Última semana '+dPT(uw.k).slice(0,5)+'–'+dPT(uw.kEnd).slice(0,5)+' (Cond+OT+Disp)',uw.trab,'h'],['Margem até 60h (última semana)',Math.max(0,60*60-uw.trab),'h'],
-      ['Acum. bissemanal (Cond+OT+Disp)',uw.bis,'h'],['Margem até 90h (condução na bissemanal)',Math.max(0,90*60-uw.bisC),'h'],
+    kpis:uw?[['Última semana '+dPT(uw.k).slice(0,5)+'–'+dPT(uw.kEnd).slice(0,5)+' (Cond+OT)',uw.trab,'h'],['Margem até 60h (última semana)',Math.max(0,60*60-uw.trab),'h'],
+      ['Acum. bissemanal (Cond+OT)',uw.bis,'h'],['Margem até 90h (condução na bissemanal)',Math.max(0,90*60-uw.bisC),'h'],
       ['Semanas em alerta (55h–60h)',W.filter(w=>w.trab>55*60&&w.trab<=60*60).length,'n'],['Média 4 meses (última semana)',uw.m4,'h'],
       ['Semanas acima de 60h',W.filter(w=>w.trab>60*60).length,'n'],['Pior semana (h trabalho)',Math.max(...W.map(w=>w.trab)),'h'],
       ['Condução na bissemanal atual (limite 90h)',bisAt?bisAt.cond:uw.bisC,'h']]:[],
