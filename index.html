@@ -374,7 +374,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   <button class="conta-btn" id="contaBtn" aria-haspopup="dialog"><span class="conta-av" id="contaAv">?</span><span class="conta-nm" id="contaNm">Conta</span><span aria-hidden="true">▾</span></button>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v4.3 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v4.4 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1200,17 +1200,27 @@ function rebuild(){
     const st=sh.segs[0].t0, en=sh.segs[sh.segs.length-1].t1;
     const tot=[0,0,0,0];for(const g of sh.segs)tot[g.a]+=g.t1-g.t0;
     const stl=L(st), d=new Date(stl*60000), iso=dISO(d);
-    let km=0;const d0=Math.floor(st*60/86400),d1=Math.floor(en*60/86400);
-    for(let k=d0;k<=d1;k++)km+=distMap[k]||0;
     const esp=Math.min(S.espera[iso]||0,tot[0]);
     return {iso,dia:DIAS[d.getUTCDay()],st,en,stl,enl:L(en),
       cond:tot[3],ot:tot[2],disp:tot[1],pausa:tot[0]-esp,esp,
-      trabalho:tot[3]+tot[2]+tot[1], jornada:en-st, km:S.km[iso]??km,
+      trabalho:tot[3]+tot[2]+tot[1], jornada:en-st, km:0,
       obs:S.obs[iso]||'', extra:!!S.extra[iso], segs:sh.segs,
       man:sh.segs.some(g=>g.man), est:sh.segs.some(g=>g.est)};
   });
-  // corrigir km duplicado em dias com 2 turnos
-  const seen={};for(const r of ROWS){if(seen[r.iso])r.km=0;seen[r.iso]=1}
+  // km do cartão: a distância de cada dia de calendário é repartida pelos turnos conforme a condução feita nesse dia
+  // (turnos que passam a meia-noite e dias com 2 turnos deixam de perder ou duplicar km)
+  {const drv={};
+   ROWS.forEach((r,i)=>{for(const g of r.segs){if(g.a!==3)continue;
+     for(let t=g.t0;t<g.t1;){const k=Math.floor(t/1440),fimDia=(k+1)*1440,ate=Math.min(g.t1,fimDia);
+       (drv[k]=drv[k]||{})[i]=(drv[k][i]||0)+(ate-t);t=ate}}});
+   for(const [k,dist] of Object.entries(distMap)){if(!dist)continue;
+     const m=drv[k];
+     if(m){const tot=Object.values(m).reduce((a,b)=>a+b,0);let resto=dist;const ids=Object.keys(m);
+       ids.forEach((i,j)=>{const v=j===ids.length-1?resto:Math.round(dist*m[i]/tot);ROWS[i].km+=v;resto-=v})}
+     else{const r=ROWS.find(r=>Math.floor(r.st/1440)<=k&&Math.floor(r.en/1440)>=k);if(r)r.km+=dist}}
+   // km escritos à mão (só valores > 0) substituem o do cartão no primeiro turno do dia
+   const seen={};for(const r of ROWS){if(!seen[r.iso]&&S.km[r.iso]>0)r.km=+S.km[r.iso];seen[r.iso]=1}
+  }
   // descansos entre turnos — lógica do período de 24h (art. 8.º/2 do Reg. 561/2006)
   // O período de 24h começa no fim do descanso anterior, ou seja, no início do turno.
   // O descanso diário tem de estar COMPLETO dentro dessas 24h:
@@ -3088,7 +3098,7 @@ function bind(){
   document.querySelectorAll('#fMes,#fSem').forEach(el=>el.onchange=e=>{if(e.target.id==='fMes'){fMes=e.target.value;fSem=''}else{fSem=e.target.value;fMes=''}render()});
   if($('#fLimpa'))$('#fLimpa').onclick=()=>{fMes='';fSem='';render()};
   document.querySelectorAll('.eEsp').forEach(el=>el.onchange=e=>{S.espera[e.target.dataset.d]=parseHM(e.target.value);save();rebuild()});
-  document.querySelectorAll('.eKm').forEach(el=>el.onchange=e=>{S.km[e.target.dataset.d]=+e.target.value||0;save();rebuild()});
+  document.querySelectorAll('.eKm').forEach(el=>el.onchange=e=>{const v=+e.target.value||0,d=e.target.dataset.d;if(v>0)S.km[d]=v;else delete S.km[d];save();rebuild()});
   document.querySelectorAll('.eObs').forEach(el=>el.onchange=e=>{S.obs[e.target.dataset.d]=e.target.value;save()});
   document.querySelectorAll('.eExt').forEach(el=>el.onchange=e=>{S.extra[e.target.dataset.d]=e.target.checked;save();rebuild()});
   const xm=(d)=>S.xmeta[d]=S.xmeta[d]||{};
@@ -3218,7 +3228,7 @@ function bind(){
       if(soma>jo){alert('Condução + outros trabalhos + disponibilidade ('+hm(soma)+') excede a jornada de '+hm(jo)+'.');return}
     }
     S.man[D.d]={src:D.src,ini:D.ini,fim:D.fim,modo:D.modo,cond:D.cond,ot:D.ot,disp:D.disp,blocos:(D.blocos||[]).filter(b=>b.ini&&b.fim)};
-    if(String(D.km).trim()!=='')S.km[D.d]=+D.km||0;
+    if(+D.km>0)S.km[D.d]=+D.km;else if(String(D.km).trim()!=='')delete S.km[D.d];
     if(String(D.obs).trim()!=='')S.obs[D.d]=D.obs;
     MDRAFT=novoDraft();save();rebuild();
   };
