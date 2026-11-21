@@ -374,7 +374,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   <button class="conta-btn" id="contaBtn" aria-haspopup="dialog"><span class="conta-av" id="contaAv">?</span><span class="conta-nm" id="contaNm">Conta</span><span aria-hidden="true">▾</span></button>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v4.7 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v4.8 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1686,6 +1686,22 @@ function registos(){
 }
 
 /* ---- Leitor de cartão ---- */
+/* ---- permissão do leitor USB (app Android), como a da câmara ---- */
+let USBMSG='';
+function usbPermHTML(d){
+  const nome=esc(d.nome||('USB '+d.vid+':'+d.pid));
+  if(d.perm===false&&AND.pedirUsb)return `<div class="camperm" style="margin-top:10px"><span class="camperm-t">🔒 ${nome}: ainda sem autorização</span>
+    <button class="btn amber usbPerm" data-id="${d.id}">🔓 Pedir permissão do leitor</button>
+    <span class="note">O Android vai perguntar se a app pode usar este aparelho USB: toca em <b>OK</b>.${USBMSG?' <b>'+esc(USBMSG)+'</b>':''}</span></div>`;
+  return `<div class="row noprint">${d.perm?'<span class="chip camok">✅ Leitor autorizado</span>':''}<button class="btn amber rdDev" data-id="${d.id}">⚡ ${nome}</button></div>`;
+}
+window.usbPermResultado=async(id,ok)=>{
+  if(!ok){USBMSG='Autorização recusada. Toca outra vez em «Pedir permissão» e escolhe OK.';rlog('Sem autorização para usar o leitor.','bad');if(TAB==='leitor')render();return}
+  USBMSG='';rlog('Leitor autorizado.','ok');
+  try{await andAbrir(id)}catch(x){rlog('Falhou: '+(x.message||x),'bad')}
+  if(TAB==='leitor')render();
+};
+window.usbMudou=()=>{if(RD.nativo&&RD.dev&&!andLista().length){RD.dev=null;RD.io=null;RD.nativo=false;rlog('Leitor desligado do telemóvel.','dim')}if(TAB==='leitor')render()};
 function leitor(){
   const tem=typeof navigator!=='undefined'&&!!navigator.usb;
   const lig=!!RD.dev;
@@ -1700,7 +1716,7 @@ function leitor(){
       <button class="btn amber" id="rdLer" ${RD.busy?'disabled':''}>${RD.busy?'A ler…':'⭘ Ler cartão'}</button>
       <button class="btn" id="rdOff">Desligar</button>
       ${RD.ddd?`<button class="btn" id="rdSave">⇩ Guardar .ddd</button>`:''}</div>`
-    :AND?(disp.length?`<div class="row noprint">${disp.map(d=>`<button class="btn amber rdDev" data-id="${d.id}">⚡ ${esc(d.nome||('USB '+d.vid+':'+d.pid))}</button>`).join('')}</div>
+    :AND?(disp.length?`${disp.map(d=>usbPermHTML(d)).join('')}
       <p class="note">Aparelhos USB ligados agora. Se o leitor não estiver na lista, verifica o cabo OTG.</p>`
       :`<div class="row noprint"><button class="btn" id="rdRefresh">↻ Procurar leitores</button></div>
       <p class="note">Nenhum aparelho USB detetado. Liga o leitor pelo cabo OTG e procura outra vez.</p>`)
@@ -3254,6 +3270,7 @@ function bind(){
   const rdOn=$('#rdOn');if(rdOn)rdOn.onclick=()=>pedir(false);
   const rdAll=$('#rdAll');if(rdAll)rdAll.onclick=()=>pedir(true);
   const rdRef=$('#rdRefresh');if(rdRef)rdRef.onclick=()=>render();
+  document.querySelectorAll('.usbPerm').forEach(el=>el.onclick=()=>{USBMSG='';try{AND.pedirUsb(+el.dataset.id)}catch(e){}});
   document.querySelectorAll('.rdDev').forEach(el=>el.onclick=async e=>{
     const id=+e.currentTarget.dataset.id;
     try{await andAbrir(id);render()}catch(x){rlog('Falhou: '+(x.message||x),'bad');render()}

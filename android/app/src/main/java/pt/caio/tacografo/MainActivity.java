@@ -76,6 +76,12 @@ public class MainActivity extends Activity {
         super.onCreate(b);
         web = new WebView(this);
         setContentView(web);
+        try {
+            IntentFilter uf = new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED);
+            uf.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbLigacoes, uf, Context.RECEIVER_EXPORTED);
+            else registerReceiver(usbLigacoes, uf);
+        } catch (Exception e) { }
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -307,6 +313,32 @@ public class MainActivity extends Activity {
         return shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) ? "negada" : "bloqueada";
     }
 
+    void avisaUsb(int id, boolean ok) {
+        runOnUiThread(() -> { if (web != null) web.evaluateJavascript("window.usbPermResultado&&window.usbPermResultado(" + id + "," + ok + ")", null); });
+    }
+
+    void avisaUsbMudou() {
+        runOnUiThread(() -> { if (web != null) web.evaluateJavascript("window.usbMudou&&window.usbMudou()", null); });
+    }
+
+    /* leitor ligado ou desligado: a página atualiza a lista sozinha */
+    final BroadcastReceiver usbLigacoes = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) { avisaUsbMudou(); }
+    };
+
+    @Override
+    protected void onNewIntent(Intent i) {
+        super.onNewIntent(i);
+        setIntent(i);
+        if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(i.getAction())) avisaUsbMudou();
+    }
+
+    @Override
+    protected void onDestroy() {
+        try { unregisterReceiver(usbLigacoes); } catch (Exception e) { }
+        super.onDestroy();
+    }
+
     void avisaCamara() {
         if (web != null) web.evaluateJavascript("window.camPermResultado&&window.camPermResultado('" + estadoCam() + "')", null);
     }
@@ -347,10 +379,37 @@ public class MainActivity extends Activity {
                     if (nome != null) o.put("nome", nome);
                     o.put("vid", String.format("%04X", d.getVendorId()));
                     o.put("pid", String.format("%04X", d.getProductId()));
+                    o.put("perm", um().hasPermission(d));
+                    boolean cartao = d.getDeviceClass() == 0x0B;
+                    for (int k = 0; k < d.getInterfaceCount(); k++) if (d.getInterface(k).getInterfaceClass() == 0x0B) cartao = true;
+                    o.put("leitor", cartao);
                     a.put(o);
                 }
             } catch (Exception e) { }
             return a.toString();
+        }
+
+        /* pedido de autorização sem bloquear a página: a resposta chega a window.usbPermResultado(id, ok) */
+        @JavascriptInterface
+        public void pedirUsb(final int id) {
+            runOnUiThread(() -> {
+                UsbDevice dev = null;
+                for (UsbDevice d : um().getDeviceList().values()) if (d.getDeviceId() == id) dev = d;
+                if (dev == null) { avisaUsb(id, false); return; }
+                if (um().hasPermission(dev)) { avisaUsb(id, true); return; }
+                BroadcastReceiver rx = new BroadcastReceiver() {
+                    @Override public void onReceive(Context c, Intent i) {
+                        try { unregisterReceiver(this); } catch (Exception e) { }
+                        avisaUsb(id, i.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false));
+                    }
+                };
+                IntentFilter f = new IntentFilter(ACTION_PERM);
+                if (Build.VERSION.SDK_INT >= 33) registerReceiver(rx, f, Context.RECEIVER_NOT_EXPORTED);
+                else registerReceiver(rx, f);
+                Intent pi = new Intent(ACTION_PERM).setPackage(getPackageName());
+                int fl = Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0;
+                um().requestPermission(dev, PendingIntent.getBroadcast(MainActivity.this, id, pi, fl));
+            });
         }
 
         boolean pedePermissao(UsbDevice d) throws InterruptedException {

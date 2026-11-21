@@ -1,7 +1,7 @@
 # APK Leitor tacografo
 Leitor de dados tacografo
 
-App **Controle de Tacógrafo (v4.7)**, publicada como PWA no Vercel:
+App **Controle de Tacógrafo (v4.8)**, publicada como PWA no Vercel:
 https://apk-leitor-tacografo.vercel.app/
 
 Sem dados pessoais no código: quem abre a app pela primeira vez cria a sua conta de condutor no ecrã de
