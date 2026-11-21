@@ -374,7 +374,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   <button class="conta-btn" id="contaBtn" aria-haspopup="dialog"><span class="conta-av" id="contaAv">?</span><span class="conta-nm" id="contaNm">Conta</span><span aria-hidden="true">▾</span></button>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v4.6 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v4.7 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -668,7 +668,7 @@ async function andAbrir(id){
   let r;
   try{r=JSON.parse(AND.open(id))}catch(e){throw new Error('O leitor não respondeu ao pedido de abertura.')}
   if(!r.ok)throw new Error(r.erro||'Não consegui abrir o leitor.');
-  RD.dev={productName:r.nome};RD.itf=r.itf;RD.seq=0;RD.nativo=true;RD.bloqueado=false;
+  RD.dev={productName:r.nome};RD.itf=r.itf;RD.seq=0;RD.nativo=true;RD.bloqueado=false;RD.andId=id;
   RD.io={
     out:async b=>{if(!AND.out(b64e(b)))throw new Error('Falha a enviar dados para o leitor.')},
     in:async ()=>b64d(AND.inp(3000))
@@ -699,19 +699,39 @@ async function ccid(tipo,dados,p){
     const h=await RD.io.in();
     if(!h||h.length<10)continue;
     const len=h[1]|h[2]<<8|h[3]<<16|h[4]<<24, st=h[7];
+    if(h[6]!==RD.seq)continue;                 // resposta atrasada de um comando anterior
+    RD.slot=st&3;                              // 0 cartão ativo · 1 cartão sem energia · 2 sem cartão
     if((st&0xC0)===0x80){await new Promise(s=>setTimeout(s,60));continue} // leitor pediu mais tempo
-    if((st&0xC0)===0x40)throw new Error('O leitor devolveu erro (0x'+h[8].toString(16)+'). O cartão está bem encaixado?');
+    if((st&0xC0)===0x40){const e=new Error(ccidErro(h[8],st&3));e.cod=h[8];e.slot=st&3;throw e}
     let out=h.slice(10,10+len);
     while(out.length<len)out=cat(out,await RD.io.in());
     return out.slice(0,len);
   }
   throw new Error('O leitor não respondeu.');
 }
+function ccidErro(cod,slot){
+  if(slot===2)return 'O leitor não deteta nenhum cartão. Insere o cartão até ao fim, com o chip virado para os contactos do leitor.';
+  if(cod===0xFE)return 'O cartão não responde (0xfe). Tira o cartão, limpa o chip com um pano seco e volta a inserir até ao fim.';
+  if(cod===0xFB)return 'Erro de hardware no leitor (0xfb). Desliga e volta a ligar o leitor.';
+  if(cod===0xE0)return 'O leitor está ocupado (0xe0). Espera uns segundos e tenta outra vez.';
+  return 'O leitor devolveu erro (0x'+cod.toString(16)+'). O cartão está bem encaixado?';
+}
+const espera=ms=>new Promise(s=>setTimeout(s,ms));
+async function ccidLimpa(){ // descarta respostas que tenham ficado pendentes de uma tentativa anterior
+  if(!RD.nativo)return;for(let i=0;i<4;i++){const h=b64d(AND.inp(80));if(!h||!h.length)break}
+}
 async function ccidLigaCartao(){
   let erro=null;
+  await ccidLimpa();
+  // o cartão está lá?
+  try{await ccid(0x65)}catch(e){}
+  if(RD.slot===2)throw new Error(ccidErro(0,2));
+  // desligar antes de ligar: alguns leitores não reiniciam o cartão se ficou ligado da tentativa anterior
+  try{await ccid(0x63)}catch(e){}
+  await espera(150);
   for(const v of [0x00,0x01,0x02,0x03]){
     try{const atr=await ccid(0x62,null,[v,0,0]);if(atr&&atr.length){RD.atr=atr;return atr}}
-    catch(e){erro=e}
+    catch(e){erro=e;if(e.slot===2||!e.cod)break;try{await ccid(0x63)}catch(x){}await espera(250)}
   }
   throw erro||new Error('Não consegui ligar o cartão. Verifica se está inserido com o chip para dentro.');
 }
@@ -832,7 +852,17 @@ async function rdLerCartao(){
   RD.busy=true;RD.prog={feito:0,total:1,etapa:'A ligar o cartão…'};render();
   try{
     rlog('A ligar o cartão…');
-    const atr=await ccidLigaCartao();
+    let atr;
+    try{atr=await ccidLigaCartao()}
+    catch(e){
+      if(!RD.nativo||!/enviar dados|não respondeu/.test(e.message||''))throw e;
+      // o leitor deixou de aceitar comandos (acontece quando reinicia por falta de energia): volta a abri-lo uma vez
+      rlog('O leitor deixou de responder — a voltar a ligá-lo…','dim');
+      try{AND.close()}catch(x){}
+      await espera(800);
+      try{await andAbrir(RD.andId)}catch(x){throw new Error('O leitor deixou de responder. Desliga o leitor do telemóvel, volta a ligá-lo e tenta outra vez. Se acontecer sempre, experimenta outro adaptador ou cabo OTG.')}
+      atr=await ccidLigaCartao();
+    }
     RD.proto=atrProto(atr);RD.ns=0;
     rlog('ATR: '+hx(atr));
     rlog('Protocolo do cartão: T='+RD.proto);
