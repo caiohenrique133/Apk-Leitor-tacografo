@@ -631,7 +631,7 @@ async function rdOpen(dev){
       };
       await rdNivel(dev);
       rlog('Leitor ligado: '+(dev.productName||'sem nome')+(dev.manufacturerName?' ('+dev.manufacturerName+')':''),'ok');
-      rlog('Interface '+c.itf.interfaceNumber+', classe 0x'+c.cls.toString(16).toUpperCase().padStart(2,'0')+' · modo '+({apdu:'APDU',tpdu:'TPDU (T=1 feito pela app)',char:'caractere'}[RD.level]||RD.level));
+      rlog('Interface '+c.itf.interfaceNumber+', classe 0x'+c.cls.toString(16).toUpperCase().padStart(2,'0')+' · modo '+({apdu:'APDU',tpdu:'TPDU',char:'caractere'}[RD.level]||RD.level));
       if(RD.level==='char')rlog('Este leitor trabalha ao nível do caractere e não é suportado.','bad');
       return;
     }catch(e){ult=e;if(c.cls===0x0B)bloq=true}
@@ -676,7 +676,7 @@ async function andAbrir(id){
   RD.level='apdu';
   try{const d=b64d(AND.descritores());if(d.length)RD.level=nivelDe(d)}catch(e){}
   rlog('Leitor ligado: '+(r.nome||'sem nome'),'ok');
-  rlog('Interface '+r.itf+', classe 0x'+(r.cls||0).toString(16).toUpperCase().padStart(2,'0')+' · modo '+({apdu:'APDU',tpdu:'TPDU (T=1 feito pela app)',char:'caractere'}[RD.level]||RD.level)+' · acesso nativo');
+  rlog('Interface '+r.itf+', classe 0x'+(r.cls||0).toString(16).toUpperCase().padStart(2,'0')+' · modo '+({apdu:'APDU',tpdu:'TPDU',char:'caractere'}[RD.level]||RD.level)+' · acesso nativo');
 }
 async function rdClose(){
   try{
@@ -714,6 +714,7 @@ function ccidErro(cod,slot){
   if(cod===0xFE)return 'O cartão não responde (0xfe). Tira o cartão, limpa o chip com um pano seco e volta a inserir até ao fim.';
   if(cod===0xFB)return 'Erro de hardware no leitor (0xfb). Desliga e volta a ligar o leitor.';
   if(cod===0xE0)return 'O leitor está ocupado (0xe0). Espera uns segundos e tenta outra vez.';
+  if(cod===0x00)return 'O leitor recusou o comando (0x0: comando não suportado). O leitor ligou o cartão mas não aceitou a troca de dados.';
   return 'O leitor devolveu erro (0x'+cod.toString(16)+'). O cartão está bem encaixado?';
 }
 const espera=ms=>new Promise(s=>setTimeout(s,ms));
@@ -744,6 +745,34 @@ function atrProto(atr){ // 0 ou 1
     else break;
   }
   return proto;
+}
+
+function atrParams(atr){ // bytes de interface do ATR que interessam ao PC_to_RDR_SetParameters
+  const r={inv:atr[0]===0x3F,tc1:0,wi:0x0A,ifsc:0x20,tb3:0x4D};
+  if(!atr||atr.length<2)return r;
+  let i=1,y=atr[1]>>4,n=1,t=0;
+  while(true){
+    const tA=(y&1)?atr[++i]:undefined,tB=(y&2)?atr[++i]:undefined,tC=(y&4)?atr[++i]:undefined;
+    if(n===1&&tC!==undefined)r.tc1=tC;
+    if(n===2&&tC!==undefined&&t===0)r.wi=tC;
+    if(n>=3&&t===1){if(tA!==undefined&&r._a===undefined){r.ifsc=tA;r._a=1}if(tB!==undefined&&r._b===undefined){r.tb3=tB;r._b=1}}
+    if(!(y&8)||i+1>=atr.length)break;
+    const td=atr[++i];t=td&0x0F;y=td>>4;n++;
+  }
+  return r;
+}
+async function ccidParametros(){ // leitores TPDU/caractere: dizer ao leitor como falar com o cartão (velocidade padrão)
+  if(RD.level==='apdu')return;
+  const a=atrParams(RD.atr);
+  try{
+    if(RD.proto===1)
+      await ccid(0x61,new Uint8Array([0x11,0x10|(a.inv?0x02:0),a.tc1,a.tb3,0x00,a.ifsc,0x00]),[1,0,0]);
+    else
+      await ccid(0x61,new Uint8Array([0x11,a.inv?0x02:0x00,a.tc1,a.wi,0x00]),[0,0,0]);
+    rlog('Parâmetros T='+RD.proto+' enviados ao leitor.','dim');
+  }catch(e){
+    rlog('O leitor não aceitou os parâmetros ('+(e.cod!==undefined?'0x'+e.cod.toString(16):e.message)+') — a continuar.','dim');
+  }
 }
 
 /* ---- T=1 (para leitores que trabalham ao nível do TPDU) ---- */
@@ -866,6 +895,7 @@ async function rdLerCartao(){
     RD.proto=atrProto(atr);RD.ns=0;
     rlog('ATR: '+hx(atr));
     rlog('Protocolo do cartão: T='+RD.proto);
+    await ccidParametros();
     if(!await selApp())throw new Error('Não encontrei a aplicação de tacógrafo neste cartão. É mesmo um cartão de condutor?');
     rlog('Aplicação de tacógrafo selecionada.','ok');
     let ficheiro=new Uint8Array(0),tam={},semAss=0;
