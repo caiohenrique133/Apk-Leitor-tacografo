@@ -374,7 +374,7 @@ tr.aus-out td:first-child{box-shadow:inset 4px 0 0 var(--faint)}
   <button class="conta-btn" id="contaBtn" aria-haspopup="dialog"><span class="conta-av" id="contaAv">?</span><span class="conta-nm" id="contaNm">Conta</span><span aria-hidden="true">▾</span></button>
   <div class="roadline"></div>
   <nav id="tabs" aria-label="Páginas"></nav>
-  <div class="side-foot"><div class="estado" id="estado">v4.8 · dados neste aparelho</div></div>
+  <div class="side-foot"><div class="estado" id="estado">v5.0 · dados neste aparelho</div></div>
 </aside>
 <div class="col">
 <header class="top">
@@ -1387,6 +1387,8 @@ function rebuild(){
     // 90h em cada duas semanas fixas consecutivas (esta + a anterior)
     const ant=ix?WEEKS[ix-1]:null,antOk=ant&&(Date.parse(w.k)-Date.parse(ant.k))===7*86400000;
     w.cond2=w.cond+(antOk?ant.cond:0);w.k2=antOk?ant.k:w.k;
+    // bissemanal atual: as mesmas duas semanas fixas (anterior + esta), com condução + outros trabalhos + disponibilidade
+    w.ot2=w.ot+(antOk?ant.ot:0);w.disp2=w.disp+(antOk?ant.disp:0);w.tot2=w.cond2+w.ot2+w.disp2;
     w.margem=60*60-w.trab;
     w.estado=w.trab>60*60?'>60h':(w.trab>=55*60?'ALERTA 55–60h':'OK');
     w.estM4=w.m4>48*60?'MÉDIA > 48h':'OK';
@@ -2308,7 +2310,7 @@ function lei84(){
     <td><span class="tag ${w.estM4==='OK'?'ok':'bad'}">${w.estM4}</span></td>
     <td class="t">${hm(w.cond)}</td>
     <td class="t">#${(w.biIdx??0)+1}${w.biNovos?' <span class="tag info">REINÍCIO</span>':''}</td>
-    <td class="t">${hm(w.bis)}</td>
+    <td class="t">${hm(w.tot2)}</td>
     <td class="t">${hm(w.bisC)}${w.bisC>90*60?' <span class="tag bad">>90h</span>':w.bisC>=0.8*90*60?' <span class="tag warn">80%</span>':''}</td></tr>`).join('');
   const prows=[...BIPER].reverse().map(p=>`<tr>
     <td>#${p.i+1}${p.aberto?' <span class="tag warn">EM CURSO</span>':''}</td>
@@ -2323,7 +2325,7 @@ function lei84(){
   <div class="kgrid">
     ${kpi('Semana atual '+dPT(cur.k).slice(0,5)+'–'+dPT(cur.kEnd).slice(0,5),hm(cur.trab),cur.trab>60*60?'bad':cur.trab>=48*60?'warn':'ok')}
     ${kpi('Margem até 60h',hm(cur.margem),cur.margem<5*60?'bad':cur.margem<12*60?'warn':'ok')}
-    ${kpi('Bissemanal atual',pa?hm(pa.trab):'—','','desde '+(pa?dPT(pa.iniIso):'—')+' · Cond+OT')}
+    ${kpi('Bissemanal atual',hm(cur.tot2),'',dPT(cur.k2).slice(0,5)+'–'+dPT(cur.kEnd).slice(0,5)+' · Cond '+hm(cur.cond2)+' + OT '+hm(cur.ot2)+' + Disp '+hm(cur.disp2))}
     ${kpi('Condução 2 semanas (lei)',hm(cur.cond2),cur.cond2>90*60?'bad':cur.cond2>=0.8*90*60?'warn':'ok','semana anterior + atual · limite 90h')}
     ${kpi('Condução na bissemanal',pa?hm(pa.cond):'—',pa&&pa.cond>90*60?'warn':'','entre descansos ≥ '+hm(LIMB))}
     ${kpi('Margem até 90h',pa?hm(pa.margem):'—',pa&&pa.margem<0?'bad':pa&&pa.margem<10*60?'warn':'ok')}
@@ -2340,7 +2342,7 @@ function lei84(){
     <select id="bisLim"><option value="2700" ${LIMB===2700?'selected':''}>≥ 45:00</option><option value="2701" ${LIMB===2701?'selected':''}>&gt; 45:00 (45:01)</option></select></div>
   <div class="tw"><table><tr><th>#</th><th>Início</th><th>Fim</th><th>Dias trab.</th><th>Dias corridos</th><th>Condução</th><th>Margem 90h</th><th>Trabalho</th><th>Jornada</th><th>Fechado por</th><th>Estado</th></tr>${prows}</table></div>
   <h2>Tabela semanal — média e bissemanal</h2>
-  <div class="tw"><table><tr><th>Início</th><th>Fim</th><th>Dias</th><th>Trabalho</th><th>Jornada</th><th>Média 4m</th><th>Margem 60h</th><th>Estado</th><th>Média</th><th>Condução</th><th>Bissem. #</th><th>Acum. bissem.</th><th>Cond. bissem.</th></tr>${rows}</table></div>`;
+  <div class="tw"><table><tr><th>Início</th><th>Fim</th><th>Dias</th><th>Trabalho</th><th>Jornada</th><th>Média 4m</th><th>Margem 60h</th><th>Estado</th><th>Média</th><th>Condução</th><th>Bissem. #</th><th>Bissemanal (2 sem., Cond+OT+Disp)</th><th>Cond. bissem.</th></tr>${rows}</table></div>`;
 }
 
 /* ---- Descansos ---- */
@@ -2837,14 +2839,14 @@ function rjFolhas(R){
   const bisAt=uw?BIPER[uw.biIdx]:null;
   F.dl84={titulo:'CONTROLO DL 84/2026 — TEMPO DE TRABALHO SEMANAL',sub:DL_SUB,nota:DL_NOTA,
     kpis:uw?[['Última semana '+dPT(uw.k).slice(0,5)+'–'+dPT(uw.kEnd).slice(0,5)+' (Cond+OT)',uw.trab,'h'],['Margem até 60h (última semana)',Math.max(0,60*60-uw.trab),'h'],
-      ['Acum. bissemanal (Cond+OT)',uw.bis,'h'],['Margem até 90h (condução na bissemanal)',Math.max(0,90*60-uw.bisC),'h'],
+      ['Bissemanal atual (2 semanas, Cond+OT+Disp)',uw.tot2,'h'],['Margem até 90h (condução na bissemanal)',Math.max(0,90*60-uw.bisC),'h'],
       ['Semanas em alerta (55h–60h)',W.filter(w=>w.trab>55*60&&w.trab<=60*60).length,'n'],['Média 4 meses (última semana)',uw.m4,'h'],
       ['Semanas acima de 60h',W.filter(w=>w.trab>60*60).length,'n'],['Pior semana (h trabalho)',Math.max(...W.map(w=>w.trab)),'h'],
       ['Condução na bissemanal atual (limite 90h)',bisAt?bisAt.cond:uw.bisC,'h']]:[],
     seccao:'TABELA SEMANAL — MÉDIA E LIMITES (DL 84/2026, art. 21.º)',
-    cab:['Semana (início)','Semana (fim)','Dias','Trabalho (h)','Jornada total (h)','Média 4 meses (h)','Margem p/ 60h','Estado semana','Estado média 4 meses','Limite 60h','Ref. 48h','Condução (h)','Acum. bissemanal (Cond+OT+Disp)','Condução acum. na bissemanal','Margem p/ 90h (condução)','Estado bissemanal (condução)','N.º da bissemanal'],
+    cab:['Semana (início)','Semana (fim)','Dias','Trabalho (h)','Jornada total (h)','Média 4 meses (h)','Margem p/ 60h','Estado semana','Estado média 4 meses','Limite 60h','Ref. 48h','Condução (h)','Bissemanal (2 semanas, Cond+OT+Disp)','Condução acum. na bissemanal','Margem p/ 90h (condução)','Estado bissemanal (condução)','N.º da bissemanal'],
     tipos:['d','d','n','hb','h','h','h','e','e','h','h','h','h','h','h','e','n'],
-    linhas:W.map(w=>({v:[w.k,w.kEnd,w.dias,w.trab,w.jorn,w.m4,Math.max(0,60*60-w.trab),estSem(w.trab),w.m4>48*60?'MÉDIA > 48h':'OK',60*60,48*60,w.cond,w.bis,w.bisC,Math.max(0,90*60-w.bisC),estBis(w.bisC),(w.biIdx??0)+1]}))};
+    linhas:W.map(w=>({v:[w.k,w.kEnd,w.dias,w.trab,w.jorn,w.m4,Math.max(0,60*60-w.trab),estSem(w.trab),w.m4>48*60?'MÉDIA > 48h':'OK',60*60,48*60,w.cond,w.tot2,w.bisC,Math.max(0,90*60-w.bisC),estBis(w.bisC),(w.biIdx??0)+1]}))};
   // DESCANSOS
   const D=R.desc, ult=D.length?D[D.length-1].r:null;
   F.desc={titulo:'DESCANSOS — INTERVALO ENTRE O FIM E O INÍCIO DO TURNO SEGUINTE',sub:DS_SUB,
@@ -3388,8 +3390,8 @@ function bind(){
       const wb=XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dadosMatrix()),'DADOS');
       {const R=relJornadaDados('');if(R)XLSX.utils.book_append_sheet(wb,folhaJornada(R),'JORNADA TOTAL');}
-      const wkm=[['Semana (início)','Semana (fim)','Dias','Trabalho','Jornada','Média 4m','Margem 60h','Estado','Condução','Bissem. #','Acum. bissem.','Cond. bissem.'],
-        ...WEEKS.map(w=>[dPT(w.k),dPT(w.kEnd),w.dias,hm(w.trab),hm(w.jorn),hm(w.m4),hm(w.margem),w.estado,hm(w.cond),(w.biIdx??0)+1,hm(w.bis),hm(w.bisC)])];
+      const wkm=[['Semana (início)','Semana (fim)','Dias','Trabalho','Jornada','Média 4m','Margem 60h','Estado','Condução','Bissem. #','Bissemanal (2 sem., Cond+OT+Disp)','Cond. bissem.'],
+        ...WEEKS.map(w=>[dPT(w.k),dPT(w.kEnd),w.dias,hm(w.trab),hm(w.jorn),hm(w.m4),hm(w.margem),w.estado,hm(w.cond),(w.biIdx??0)+1,hm(w.tot2),hm(w.bisC)])];
       XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(wkm),'LEI 84-2026');
       const bis=[['#','Início','Fim','Dias trabalhados','Dias corridos','Condução','Margem 90h','Trabalho','Jornada','Fechado por (descanso)','Data do descanso','Estado'],
         ...BIPER.map(p=>[p.i+1,dPT(p.iniIso),dPT(p.fimIso),p.dias,p.span,hm(p.cond),hm(p.margem),hm(p.trab),hm(p.jorn),p.fecho?hm(p.fecho.dur):'EM CURSO',p.fecho?dPT(p.fecho.iso):'',p.cond>90*60?'> 90h':p.cond>=0.8*90*60?'≥ 80%':'OK'])];
